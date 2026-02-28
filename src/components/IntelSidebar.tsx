@@ -11,7 +11,6 @@ interface IntelSidebarProps {
   onToggleLayer: (layer: keyof LayerVisibility) => void;
   selectedEntity: SelectedEntity | null;
   onCloseDetail: () => void;
-  onTrack: () => void;
   aircraftCount: number;
   satelliteCount: number;
 }
@@ -26,7 +25,7 @@ const LAYER_CONFIG: { key: keyof LayerVisibility; label: string; icon: any; colo
 ];
 
 export function IntelSidebar({
-  layers, onToggleLayer, selectedEntity, onCloseDetail, onTrack,
+  layers, onToggleLayer, selectedEntity, onCloseDetail,
   aircraftCount, satelliteCount,
 }: IntelSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -50,7 +49,6 @@ export function IntelSidebar({
 
       {!collapsed && (
         <div className="flex-1 overflow-y-auto p-3 space-y-4 scanline">
-          {/* Layers */}
           <div>
             <h2 className="text-[10px] font-display uppercase tracking-[0.25em] text-muted-foreground mb-2">
               DATA LAYERS
@@ -77,7 +75,6 @@ export function IntelSidebar({
             </div>
           </div>
 
-          {/* Selected entity detail */}
           {selectedEntity && (
             <div>
               <h2 className="text-[10px] font-display uppercase tracking-[0.25em] text-muted-foreground mb-2">
@@ -86,12 +83,10 @@ export function IntelSidebar({
               <DetailPanel
                 entity={selectedEntity}
                 onClose={onCloseDetail}
-                onTrack={onTrack}
               />
             </div>
           )}
 
-          {/* Status */}
           <div className="mt-auto pt-4 border-t border-border">
             <div className="text-[9px] text-muted-foreground font-mono space-y-1">
               <div>SYS STATUS: <span className="text-accent">OPERATIONAL</span></div>

@@ -46,7 +46,7 @@ export function useAircraft(enabled: boolean) {
     };
 
     fetchAircraft();
-    intervalRef.current = setInterval(fetchAircraft, 15000);
+    intervalRef.current = setInterval(fetchAircraft, 10000);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);

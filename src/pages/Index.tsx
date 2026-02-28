@@ -9,18 +9,10 @@ const Index = () => {
   const {
     layers, toggleLayer,
     selectedEntity, selectEntity,
-    trackingEntity, trackEntity, stopTracking,
   } = useGlobeState();
 
   const { aircraft } = useAircraft(layers.aircraft);
   const { satellites } = useSatellites(layers.satellites);
-
-  const handleTrack = () => {
-    if (!selectedEntity) return;
-    const d = selectedEntity.data as any;
-    const id = d.icao24 || d.name || d.mmsi || '';
-    trackEntity(selectedEntity.type, id);
-  };
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-background">
@@ -31,7 +23,6 @@ const Index = () => {
           onToggleLayer={toggleLayer}
           selectedEntity={selectedEntity}
           onCloseDetail={() => selectEntity(null)}
-          onTrack={handleTrack}
           aircraftCount={aircraft.length}
           satelliteCount={satellites.length}
         />
@@ -41,9 +32,7 @@ const Index = () => {
             aircraft={aircraft}
             satellites={satellites}
             onEntitySelect={selectEntity}
-            trackingEntity={trackingEntity}
           />
-          {/* Grid overlay */}
           <div className="absolute inset-0 pointer-events-none scanline opacity-30" />
         </main>
       </div>

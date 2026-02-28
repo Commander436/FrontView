@@ -1,11 +1,10 @@
 import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship } from '@/types/globe';
-import { X, Crosshair, Plane, Satellite, Building2, Swords, Anchor, MapPin } from 'lucide-react';
+import { X, Plane, Satellite, Building2, Swords, Anchor, MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface DetailPanelProps {
   entity: SelectedEntity;
   onClose: () => void;
-  onTrack: () => void;
 }
 
 function InfoRow({ label, value }: { label: string; value: string | number | undefined }) {
@@ -141,7 +140,7 @@ function renderDetails(entity: SelectedEntity) {
   }
 }
 
-export function DetailPanel({ entity, onClose, onTrack }: DetailPanelProps) {
+export function DetailPanel({ entity, onClose }: DetailPanelProps) {
   const severityColor = entity.type === 'conflict'
     ? (entity.data as ConflictZone).severity === 'high' ? 'text-neon-red' : 'text-neon-amber'
     : 'text-primary';
@@ -161,13 +160,6 @@ export function DetailPanel({ entity, onClose, onTrack }: DetailPanelProps) {
         </button>
       </div>
       <div className="space-y-0.5">{renderDetails(entity)}</div>
-      <button
-        onClick={onTrack}
-        className="mt-3 w-full flex items-center justify-center gap-2 py-1.5 rounded border border-primary/40 bg-primary/10 text-primary text-xs font-display tracking-wider hover:bg-primary/20 transition-colors"
-      >
-        <Crosshair className="w-3 h-3" />
-        TRACK
-      </button>
     </div>
   );
 }
