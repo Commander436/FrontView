@@ -22,7 +22,6 @@ export function useAircraft(enabled: boolean) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const states: Aircraft[] = (data.states || [])
-          .slice(0, 300)
           .map((s: any[]) => ({
             icao24: s[0],
             callsign: (s[1] || '').trim(),
@@ -35,7 +34,7 @@ export function useAircraft(enabled: boolean) {
             onGround: s[8],
             lastContact: s[4],
           }))
-          .filter((a: Aircraft) => a.latitude && a.longitude && !a.onGround);
+          .filter((a: Aircraft) => a.latitude != null && a.longitude != null && !a.onGround);
         setAircraft(states);
         setLastUpdate(new Date());
       } catch (err: any) {
