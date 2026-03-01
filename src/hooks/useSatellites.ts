@@ -11,6 +11,22 @@ interface TLERecord {
   name: string;
   tle1: string;
   tle2: string;
+  noradId: string;
+}
+
+const TLE_GROUPS = [
+  'stations',
+  'active',
+  'starlink',
+  'gnss',
+  'weather',
+  'resource',
+  'science',
+  'geo',
+];
+
+function extractNoradId(tle2: string): string {
+  return tle2.substring(2, 7).trim();
 }
 
 function propagateSatellite(rec: TLERecord): SatelliteData | null {
@@ -25,12 +41,37 @@ function propagateSatellite(rec: TLERecord): SatelliteData | null {
       name: rec.name,
       latitude: (geo.latitude * 180) / Math.PI,
       longitude: (geo.longitude * 180) / Math.PI,
-      altitude: geo.height, // km
+      altitude: geo.height,
       tle1: rec.tle1,
       tle2: rec.tle2,
+      noradId: rec.noradId,
     };
   } catch {
     return null;
+  }
+}
+
+async function fetchTLEGroup(group: string): Promise<TLERecord[]> {
+  try {
+    const res = await fetch(
+      `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`
+    );
+    if (!res.ok) return [];
+    const text = await res.text();
+    const lines = text.trim().split('\n');
+    const records: TLERecord[] = [];
+    for (let i = 0; i + 2 < lines.length; i += 3) {
+      const tle2 = lines[i + 2].trim();
+      records.push({
+        name: lines[i].trim(),
+        tle1: lines[i + 1].trim(),
+        tle2,
+        noradId: extractNoradId(tle2),
+      });
+    }
+    return records;
+  } catch {
+    return [];
   }
 }
 
@@ -55,36 +96,32 @@ export function useSatellites(enabled: boolean) {
       return;
     }
 
-    const fetchTLEs = async () => {
+    const fetchAll = async () => {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(
-          'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle'
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
-        const lines = text.trim().split('\n');
-        const records: TLERecord[] = [];
-        for (let i = 0; i + 2 < lines.length; i += 3) {
-          records.push({
-            name: lines[i].trim(),
-            tle1: lines[i + 1].trim(),
-            tle2: lines[i + 2].trim(),
-          });
+        const allGroups = await Promise.all(TLE_GROUPS.map(fetchTLEGroup));
+        const allRecords = allGroups.flat();
+        // Deduplicate by NORAD ID
+        const seen = new Set<string>();
+        const unique: TLERecord[] = [];
+        for (const rec of allRecords) {
+          if (!seen.has(rec.noradId)) {
+            seen.add(rec.noradId);
+            unique.push(rec);
+          }
         }
-        tleRecords.current = records;
+        tleRecords.current = unique;
         propagateAll();
       } catch (err: any) {
         setError(err.message);
-        console.warn('Satellite fetch failed:', err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTLEs();
-    intervalRef.current = setInterval(propagateAll, 3000);
+    fetchAll();
+    intervalRef.current = setInterval(propagateAll, 5000);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);

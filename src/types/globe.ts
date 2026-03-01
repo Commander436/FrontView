@@ -18,6 +18,7 @@ export interface SatelliteData {
   altitude: number;
   tle1: string;
   tle2: string;
+  noradId?: string;
 }
 
 export interface City {
@@ -28,6 +29,7 @@ export interface City {
   population: number;
   timezone: string;
   description: string;
+  tier: 1 | 2 | 3 | 4;
 }
 
 export interface MilitaryBase {
@@ -42,11 +44,13 @@ export interface MilitaryBase {
 export interface ConflictZone {
   name: string;
   region: string;
+  countries: string[];
   latitude: number;
   longitude: number;
   radius: number;
   severity: 'high' | 'medium' | 'low';
   summary: string;
+  recentDevelopments?: string;
 }
 
 export interface Ship {
@@ -72,4 +76,5 @@ export interface LayerVisibility {
   bases: boolean;
   conflicts: boolean;
   cities: boolean;
+  showOrbits: boolean;
 }

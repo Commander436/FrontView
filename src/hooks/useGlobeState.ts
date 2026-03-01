@@ -9,10 +9,10 @@ export function useGlobeState() {
     bases: true,
     conflicts: true,
     cities: true,
+    showOrbits: false,
   });
 
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null);
-  const [trackingEntity, setTrackingEntity] = useState<{ type: string; id: string } | null>(null);
 
   const toggleLayer = useCallback((layer: keyof LayerVisibility) => {
     setLayers(prev => ({ ...prev, [layer]: !prev[layer] }));
@@ -22,21 +22,10 @@ export function useGlobeState() {
     setSelectedEntity(entity);
   }, []);
 
-  const trackEntity = useCallback((type: string, id: string) => {
-    setTrackingEntity({ type, id });
-  }, []);
-
-  const stopTracking = useCallback(() => {
-    setTrackingEntity(null);
-  }, []);
-
   return {
     layers,
     toggleLayer,
     selectedEntity,
     selectEntity,
-    trackingEntity,
-    trackEntity,
-    stopTracking,
   };
 }

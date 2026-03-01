@@ -67,7 +67,7 @@ function renderDetails(entity: SelectedEntity) {
       const a = d as Aircraft;
       return (
         <>
-          <InfoRow label="Callsign" value={a.callsign} />
+          <InfoRow label="Callsign" value={a.callsign || 'N/A'} />
           <InfoRow label="ICAO24" value={a.icao24} />
           <InfoRow label="Country" value={a.originCountry} />
           <InfoRow label="Altitude" value={`${Math.round(a.altitude)} m`} />
@@ -90,11 +90,15 @@ function renderDetails(entity: SelectedEntity) {
     }
     case 'city': {
       const c = d as City;
-      const localTime = new Date().toLocaleTimeString('en-US', { timeZone: c.timezone, hour12: false });
+      let localTime = '';
+      try {
+        localTime = new Date().toLocaleTimeString('en-US', { timeZone: c.timezone, hour12: false });
+      } catch { localTime = 'N/A'; }
       return (
         <>
           <InfoRow label="Country" value={c.country} />
           <InfoRow label="Population" value={c.population.toLocaleString()} />
+          <InfoRow label="Tier" value={`Tier ${c.tier}`} />
           <InfoRow label="Timezone" value={c.timezone} />
           <InfoRow label="Local Time" value={localTime} />
           <p className="text-muted-foreground text-[10px] mt-2">{c.description}</p>
@@ -121,7 +125,14 @@ function renderDetails(entity: SelectedEntity) {
         <>
           <InfoRow label="Region" value={z.region} />
           <InfoRow label="Severity" value={z.severity.toUpperCase()} />
+          <InfoRow label="Countries" value={z.countries.join(', ')} />
           <p className="text-muted-foreground text-[10px] mt-2">{z.summary}</p>
+          {z.recentDevelopments && (
+            <div className="mt-2 border-t border-border pt-2">
+              <span className="text-[10px] text-neon-red uppercase tracking-wider">Recent Intel</span>
+              <p className="text-muted-foreground text-[10px] mt-1">{z.recentDevelopments}</p>
+            </div>
+          )}
         </>
       );
     }
