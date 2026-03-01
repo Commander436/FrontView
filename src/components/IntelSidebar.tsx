@@ -2,7 +2,7 @@ import { LayerVisibility, SelectedEntity } from '@/types/globe';
 import { DetailPanel } from './DetailPanel';
 import {
   Plane, Anchor, Satellite, Building2, Swords, MapPin,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Orbit
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -16,12 +16,12 @@ interface IntelSidebarProps {
 }
 
 const LAYER_CONFIG: { key: keyof LayerVisibility; label: string; icon: any; color: string }[] = [
-  { key: 'aircraft', label: 'AIRCRAFT', icon: Plane, color: 'text-primary' },
+  { key: 'aircraft', label: 'AIRCRAFT', icon: Plane, color: 'text-foreground' },
   { key: 'ships', label: 'SHIPS', icon: Anchor, color: 'text-neon-blue' },
   { key: 'satellites', label: 'SATELLITES', icon: Satellite, color: 'text-neon-amber' },
   { key: 'bases', label: 'MIL BASES', icon: Building2, color: 'text-neon-green' },
   { key: 'conflicts', label: 'CONFLICTS', icon: Swords, color: 'text-neon-red' },
-  { key: 'cities', label: 'CITIES', icon: MapPin, color: 'text-foreground' },
+  { key: 'cities', label: 'CITIES', icon: MapPin, color: 'text-primary' },
 ];
 
 export function IntelSidebar({
@@ -55,22 +55,38 @@ export function IntelSidebar({
             </h2>
             <div className="space-y-1">
               {LAYER_CONFIG.map(({ key, label, icon: Icon, color }) => (
-                <button
-                  key={key}
-                  onClick={() => onToggleLayer(key)}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
-                    layers[key]
-                      ? 'bg-secondary text-foreground'
-                      : 'text-muted-foreground hover:bg-secondary/50'
-                  }`}
-                >
-                  <Icon className={`w-3.5 h-3.5 ${layers[key] ? color : 'opacity-40'}`} />
-                  <span className="font-display tracking-wider text-[10px]">{label}</span>
-                  {layers[key] && getCount(key) !== undefined && (
-                    <span className="ml-auto text-[9px] font-mono text-primary">{getCount(key)}</span>
+                <div key={key}>
+                  <button
+                    onClick={() => onToggleLayer(key)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
+                      layers[key]
+                        ? 'bg-secondary text-foreground'
+                        : 'text-muted-foreground hover:bg-secondary/50'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${layers[key] ? color : 'opacity-40'}`} />
+                    <span className="font-display tracking-wider text-[10px]">{label}</span>
+                    {layers[key] && getCount(key as string) !== undefined && (
+                      <span className="ml-auto text-[9px] font-mono text-primary">{getCount(key as string)}</span>
+                    )}
+                    <span className={`ml-auto w-1.5 h-1.5 rounded-full ${layers[key] ? 'bg-accent' : 'bg-muted-foreground/30'}`} />
+                  </button>
+                  {/* Orbit sub-toggle under Satellites */}
+                  {key === 'satellites' && layers.satellites && (
+                    <button
+                      onClick={() => onToggleLayer('showOrbits')}
+                      className={`w-full flex items-center gap-2 px-2 py-1 pl-8 rounded text-xs transition-colors ${
+                        layers.showOrbits
+                          ? 'text-neon-amber'
+                          : 'text-muted-foreground hover:bg-secondary/50'
+                      }`}
+                    >
+                      <Orbit className={`w-3 h-3 ${layers.showOrbits ? 'text-neon-amber' : 'opacity-40'}`} />
+                      <span className="font-display tracking-wider text-[9px]">SHOW ORBITS</span>
+                      <span className={`ml-auto w-1.5 h-1.5 rounded-full ${layers.showOrbits ? 'bg-neon-amber' : 'bg-muted-foreground/30'}`} />
+                    </button>
                   )}
-                  <span className={`ml-auto w-1.5 h-1.5 rounded-full ${layers[key] ? 'bg-accent' : 'bg-muted-foreground/30'}`} />
-                </button>
+                </div>
               ))}
             </div>
           </div>

@@ -4,6 +4,12 @@ import { CITIES } from '@/data/cities';
 import { MILITARY_BASES } from '@/data/militaryBases';
 import { CONFLICT_ZONES } from '@/data/conflictZones';
 import { SAMPLE_SHIPS } from '@/data/ships';
+import {
+  twoline2satrec,
+  propagate,
+  gstime,
+  eciToGeodetic,
+} from 'satellite.js';
 
 declare const Cesium: any;
 
@@ -14,11 +20,34 @@ interface GlobeViewProps {
   onEntitySelect: (entity: any) => void;
 }
 
+function computeOrbitPath(tle1: string, tle2: string, steps = 120): number[] {
+  try {
+    const satrec = twoline2satrec(tle1, tle2);
+    const now = Date.now();
+    const coords: number[] = [];
+    for (let i = 0; i < steps; i++) {
+      const t = new Date(now + (i - steps / 2) * 60000);
+      const pv = propagate(satrec, t);
+      if (!pv.position || typeof pv.position === 'boolean') continue;
+      const gmst = gstime(t);
+      const geo = eciToGeodetic(pv.position, gmst);
+      const lat = (geo.latitude * 180) / Math.PI;
+      const lon = (geo.longitude * 180) / Math.PI;
+      const alt = geo.height * 1000;
+      coords.push(lon, lat, alt);
+    }
+    return coords;
+  } catch {
+    return [];
+  }
+}
+
 export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
 
+  // Initialize viewer once
   useEffect(() => {
     if (!containerRef.current || viewerRef.current) return;
     if (typeof Cesium === 'undefined') {
@@ -26,9 +55,11 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
       return;
     }
 
-    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI0YjA5ZjYwNi01MGQyLTRmYmEtYTU0OS1kYzgxMTJhNWMyMTciLCJpZCI6MjU5LCJzY29wZXMiOlsiYXNyIiwiZ2MiXSwiaWF0IjoxNjg0NDcwNzY3fQ.CH5h0i_sXjlJuFqm9N1jEoHT-OT4OhPAHQ3wJHnMfzU';
+    // No Ion token needed
+    Cesium.Ion.defaultAccessToken = undefined;
 
     const viewer = new Cesium.Viewer(containerRef.current, {
+      imageryProvider: false,
       baseLayerPicker: false,
       geocoder: false,
       homeButton: false,
@@ -44,18 +75,30 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
       maximumRenderTimeChange: Infinity,
     });
 
-    // Dark atmosphere styling
-    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#080812');
+    // Remove any default layers and add ESRI free imagery
+    viewer.imageryLayers.removeAll();
+    viewer.imageryLayers.addImageryProvider(
+      new Cesium.UrlTemplateImageryProvider({
+        url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        maximumLevel: 18,
+        credit: 'Esri, Maxar, Earthstar Geographics',
+      })
+    );
+
+    // Globe settings
+    viewer.scene.globe.show = true;
+    viewer.scene.globe.baseColor = Cesium.Color.BLACK;
     viewer.scene.globe.enableLighting = false;
     viewer.scene.globe.showGroundAtmosphere = false;
+    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#080812');
     viewer.scene.skyBox = undefined;
     viewer.scene.sun = undefined;
     viewer.scene.moon = undefined;
     viewer.scene.skyAtmosphere.show = false;
     viewer.scene.fog.enabled = false;
 
-    // Create data sources
-    const layerNames = ['aircraft', 'ships', 'satellites', 'bases', 'conflicts', 'cities'];
+    // Data sources
+    const layerNames = ['aircraft', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'cities'];
     layerNames.forEach((name) => {
       const ds = new Cesium.CustomDataSource(name);
       viewer.dataSources.add(ds);
@@ -67,13 +110,11 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     handler.setInputAction((click: any) => {
       const picked = viewer.scene.pick(click.position);
       if (Cesium.defined(picked) && picked.id) {
-        const entity = picked.id;
         try {
-          const entityType = entity.properties?.entityType?.getValue();
-          const entityDataStr = entity.properties?.entityData?.getValue();
+          const entityType = picked.id.properties?.entityType?.getValue();
+          const entityDataStr = picked.id.properties?.entityData?.getValue();
           if (entityType && entityDataStr) {
-            const data = JSON.parse(entityDataStr);
-            onEntitySelect({ type: entityType, data });
+            onEntitySelect({ type: entityType, data: JSON.parse(entityDataStr) });
           }
         } catch (e) {
           console.warn('Entity pick error', e);
@@ -96,7 +137,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     };
   }, []);
 
-  // Aircraft layer
+  // Aircraft layer - white plane dots
   useEffect(() => {
     const ds = dsRefs.current['aircraft'];
     if (!ds) return;
@@ -108,12 +149,12 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, a.altitude),
         point: {
-          pixelSize: 5,
-          color: Cesium.Color.fromCssColorString('#00ffd5'),
-          outlineColor: Cesium.Color.fromCssColorString('#00ffd580'),
+          pixelSize: 4,
+          color: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.fromCssColorString('#ffffff60'),
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.6),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.8, 2e7, 0.5),
         },
         properties: {
           entityType: 'aircraft',
@@ -158,7 +199,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     });
   }, [layers.ships]);
 
-  // Satellites layer
+  // Satellites layer - amber dots
   useEffect(() => {
     const ds = dsRefs.current['satellites'];
     if (!ds) return;
@@ -175,7 +216,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
           outlineColor: Cesium.Color.fromCssColorString('#f59e0b60'),
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.4),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.3),
         },
         properties: {
           entityType: 'satellite',
@@ -185,7 +226,31 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     });
   }, [satellites, layers.satellites]);
 
-  // Military bases layer
+  // Orbit polylines
+  useEffect(() => {
+    const ds = dsRefs.current['orbits'];
+    if (!ds) return;
+    ds.show = layers.satellites && layers.showOrbits;
+    ds.entities.removeAll();
+    if (!layers.satellites || !layers.showOrbits) return;
+
+    // Only draw orbits for first 200 sats to keep it performant
+    const subset = satellites.slice(0, 200);
+    subset.forEach((s) => {
+      const coords = computeOrbitPath(s.tle1, s.tle2, 90);
+      if (coords.length < 6) return;
+      ds.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights(coords),
+          width: 1,
+          material: Cesium.Color.fromCssColorString('#f59e0b30'),
+          clampToGround: false,
+        },
+      });
+    });
+  }, [satellites, layers.satellites, layers.showOrbits]);
+
+  // Military bases layer - green
   useEffect(() => {
     const ds = dsRefs.current['bases'];
     if (!ds) return;
@@ -221,7 +286,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     if (!layers.conflicts) return;
 
     CONFLICT_ZONES.forEach((z) => {
-      const color = z.severity === 'high' ? '#ff333340' : '#f59e0b30';
+      const color = z.severity === 'high' ? '#ff333340' : z.severity === 'medium' ? '#f59e0b30' : '#f59e0b18';
       const outlineColor = z.severity === 'high' ? '#ff3333' : '#f59e0b';
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(z.longitude, z.latitude, 0),
@@ -242,7 +307,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     });
   }, [layers.conflicts]);
 
-  // Cities layer
+  // Cities layer - tiered visibility
   useEffect(() => {
     const ds = dsRefs.current['cities'];
     if (!ds) return;
@@ -251,15 +316,19 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     if (!layers.cities) return;
 
     CITIES.forEach((c) => {
+      const size = c.tier === 1 ? 6 : c.tier === 2 ? 4 : 3;
+      const labelDist = c.tier === 1 ? 1.2e7 : c.tier === 2 ? 6e6 : 3e6;
+      const pointDist = c.tier === 1 ? 2e7 : c.tier === 2 ? 1.2e7 : 6e6;
+
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(c.longitude, c.latitude, 0),
         point: {
-          pixelSize: 4,
+          pixelSize: size,
           color: Cesium.Color.fromCssColorString('#e2e8f0'),
           outlineColor: Cesium.Color.fromCssColorString('#e2e8f060'),
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 1e7, 0.5),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, pointDist, c.tier === 1 ? 0.5 : 0),
         },
         label: {
           text: c.name,
@@ -270,8 +339,8 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           pixelOffset: new Cesium.Cartesian2(0, -12),
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
-          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, labelDist, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, labelDist, 0),
         },
         properties: {
           entityType: 'city',
