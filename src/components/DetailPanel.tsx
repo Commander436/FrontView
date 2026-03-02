@@ -1,5 +1,5 @@
 import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship } from '@/types/globe';
-import { X, Plane, Satellite, Building2, Swords, Anchor, MapPin } from 'lucide-react';
+import { Plane, Satellite, Building2, Swords, Anchor, MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface DetailPanelProps {
@@ -10,9 +10,9 @@ interface DetailPanelProps {
 function InfoRow({ label, value }: { label: string; value: string | number | undefined }) {
   if (value === undefined || value === '') return null;
   return (
-    <div className="flex justify-between items-center py-1 border-b border-border/50">
-      <span className="text-muted-foreground text-[10px] uppercase tracking-wider">{label}</span>
-      <span className="text-foreground text-xs font-mono">{value}</span>
+    <div className="flex justify-between items-center py-1 border-b border-border/30">
+      <span className="text-muted-foreground text-[9px] uppercase tracking-wider">{label}</span>
+      <span className="text-foreground text-[10px] font-mono">{value}</span>
     </div>
   );
 }
@@ -25,24 +25,25 @@ function WeatherInfo({ lat, lon }: { lat: number; lon: number }) {
       .then(d => setWeather(d.current_weather))
       .catch(() => {});
   }, [lat, lon]);
-  if (!weather) return <div className="text-muted-foreground text-[10px]">Loading weather…</div>;
+  if (!weather) return <div className="text-muted-foreground text-[9px]">Loading weather…</div>;
   return (
     <>
-      <InfoRow label="Temperature" value={`${weather.temperature}°C`} />
-      <InfoRow label="Wind Speed" value={`${weather.windspeed} km/h`} />
-      <InfoRow label="Wind Dir" value={`${weather.winddirection}°`} />
+      <InfoRow label="Temp" value={`${weather.temperature}°C`} />
+      <InfoRow label="Wind" value={`${weather.windspeed} km/h`} />
+      <InfoRow label="Dir" value={`${weather.winddirection}°`} />
     </>
   );
 }
 
 function getIcon(type: string) {
+  const cls = "w-4 h-4";
   switch (type) {
-    case 'aircraft': return <Plane className="w-4 h-4" />;
-    case 'satellite': return <Satellite className="w-4 h-4" />;
-    case 'city': return <MapPin className="w-4 h-4" />;
-    case 'base': return <Building2 className="w-4 h-4" />;
-    case 'conflict': return <Swords className="w-4 h-4" />;
-    case 'ship': return <Anchor className="w-4 h-4" />;
+    case 'aircraft': return <Plane className={cls} />;
+    case 'satellite': return <Satellite className={cls} />;
+    case 'city': return <MapPin className={cls} />;
+    case 'base': return <Building2 className={cls} />;
+    case 'conflict': return <Swords className={cls} />;
+    case 'ship': return <Anchor className={cls} />;
     default: return null;
   }
 }
@@ -73,6 +74,12 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Altitude" value={`${Math.round(a.altitude)} m`} />
           <InfoRow label="Speed" value={`${Math.round(a.velocity)} m/s`} />
           <InfoRow label="Heading" value={`${Math.round(a.heading)}°`} />
+          {a.militaryClassification && (
+            <div className="mt-2 border-t border-border/30 pt-2">
+              <span className="text-[9px] text-orange-400 uppercase tracking-wider font-display">Military Intel</span>
+              <InfoRow label="Classification" value={a.militaryClassification.toUpperCase()} />
+            </div>
+          )}
           <InfoRow label="Last Contact" value={new Date(a.lastContact * 1000).toUTCString()} />
         </>
       );
@@ -82,6 +89,7 @@ function renderDetails(entity: SelectedEntity) {
       return (
         <>
           <InfoRow label="Name" value={s.name} />
+          <InfoRow label="NORAD" value={s.noradId} />
           <InfoRow label="Altitude" value={`${Math.round(s.altitude)} km`} />
           <InfoRow label="Lat" value={s.latitude.toFixed(4)} />
           <InfoRow label="Lon" value={s.longitude.toFixed(4)} />
@@ -101,9 +109,9 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Tier" value={`Tier ${c.tier}`} />
           <InfoRow label="Timezone" value={c.timezone} />
           <InfoRow label="Local Time" value={localTime} />
-          <p className="text-muted-foreground text-[10px] mt-2">{c.description}</p>
-          <div className="mt-2 border-t border-border pt-2">
-            <span className="text-[10px] text-primary uppercase tracking-wider">Weather</span>
+          <p className="text-muted-foreground text-[9px] mt-2">{c.description}</p>
+          <div className="mt-2 border-t border-border/30 pt-2">
+            <span className="text-[9px] text-primary uppercase tracking-wider font-display">Weather</span>
             <WeatherInfo lat={c.latitude} lon={c.longitude} />
           </div>
         </>
@@ -115,7 +123,7 @@ function renderDetails(entity: SelectedEntity) {
         <>
           <InfoRow label="Country" value={b.country} />
           <InfoRow label="Branch" value={b.branch} />
-          <p className="text-muted-foreground text-[10px] mt-2">{b.description}</p>
+          <p className="text-muted-foreground text-[9px] mt-2">{b.description}</p>
         </>
       );
     }
@@ -126,11 +134,11 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Region" value={z.region} />
           <InfoRow label="Severity" value={z.severity.toUpperCase()} />
           <InfoRow label="Countries" value={z.countries.join(', ')} />
-          <p className="text-muted-foreground text-[10px] mt-2">{z.summary}</p>
+          <p className="text-muted-foreground text-[9px] mt-2">{z.summary}</p>
           {z.recentDevelopments && (
-            <div className="mt-2 border-t border-border pt-2">
-              <span className="text-[10px] text-neon-red uppercase tracking-wider">Recent Intel</span>
-              <p className="text-muted-foreground text-[10px] mt-1">{z.recentDevelopments}</p>
+            <div className="mt-2 border-t border-border/30 pt-2">
+              <span className="text-[9px] text-neon-red uppercase tracking-wider font-display">Recent Intel</span>
+              <p className="text-muted-foreground text-[9px] mt-1">{z.recentDevelopments}</p>
             </div>
           )}
         </>
@@ -154,23 +162,20 @@ function renderDetails(entity: SelectedEntity) {
 export function DetailPanel({ entity, onClose }: DetailPanelProps) {
   const severityColor = entity.type === 'conflict'
     ? (entity.data as ConflictZone).severity === 'high' ? 'text-neon-red' : 'text-neon-amber'
-    : 'text-primary';
+    : entity.type === 'aircraft' && (entity.data as Aircraft).militaryClassification
+      ? 'text-orange-400'
+      : 'text-primary';
 
   return (
-    <div className="animate-fade-in border border-border rounded bg-card p-3">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className={severityColor}>{getIcon(entity.type)}</span>
-          <div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{entity.type}</div>
-            <div className="text-sm font-display font-semibold text-foreground">{getTitle(entity)}</div>
-          </div>
+    <div className="space-y-0.5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className={severityColor}>{getIcon(entity.type)}</span>
+        <div>
+          <div className="text-[8px] uppercase tracking-wider text-muted-foreground">{entity.type}</div>
+          <div className="text-xs font-display font-semibold text-foreground">{getTitle(entity)}</div>
         </div>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
-          <X className="w-4 h-4" />
-        </button>
       </div>
-      <div className="space-y-0.5">{renderDetails(entity)}</div>
+      {renderDetails(entity)}
     </div>
   );
 }
