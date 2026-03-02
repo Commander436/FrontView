@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { LayerVisibility, SelectedEntity } from '@/types/globe';
+import { LayerVisibility, SelectedEntity, DisplayMode } from '@/types/globe';
 
 export function useGlobeState() {
   const [layers, setLayers] = useState<LayerVisibility>({
@@ -10,9 +10,12 @@ export function useGlobeState() {
     conflicts: true,
     cities: true,
     showOrbits: false,
+    militaryFlights: false,
+    weatherRadar: false,
   });
 
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('normal');
 
   const toggleLayer = useCallback((layer: keyof LayerVisibility) => {
     setLayers(prev => ({ ...prev, [layer]: !prev[layer] }));
@@ -27,5 +30,7 @@ export function useGlobeState() {
     toggleLayer,
     selectedEntity,
     selectEntity,
+    displayMode,
+    setDisplayMode,
   };
 }

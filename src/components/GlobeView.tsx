@@ -31,10 +31,11 @@ function computeOrbitPath(tle1: string, tle2: string, steps = 120): number[] {
       if (!pv.position || typeof pv.position === 'boolean') continue;
       const gmst = gstime(t);
       const geo = eciToGeodetic(pv.position, gmst);
-      const lat = (geo.latitude * 180) / Math.PI;
-      const lon = (geo.longitude * 180) / Math.PI;
-      const alt = geo.height * 1000;
-      coords.push(lon, lat, alt);
+      coords.push(
+        (geo.longitude * 180) / Math.PI,
+        (geo.latitude * 180) / Math.PI,
+        geo.height * 1000
+      );
     }
     return coords;
   } catch {
@@ -46,6 +47,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
+  const weatherLayerRef = useRef<any>(null);
 
   // Initialize viewer once
   useEffect(() => {
@@ -55,7 +57,6 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
       return;
     }
 
-    // No Ion token needed
     Cesium.Ion.defaultAccessToken = undefined;
 
     const viewer = new Cesium.Viewer(containerRef.current, {
@@ -75,7 +76,6 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
       maximumRenderTimeChange: Infinity,
     });
 
-    // Remove any default layers and add ESRI free imagery
     viewer.imageryLayers.removeAll();
     viewer.imageryLayers.addImageryProvider(
       new Cesium.UrlTemplateImageryProvider({
@@ -85,7 +85,6 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
       })
     );
 
-    // Globe settings
     viewer.scene.globe.show = true;
     viewer.scene.globe.baseColor = Cesium.Color.BLACK;
     viewer.scene.globe.enableLighting = false;
@@ -97,7 +96,6 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     viewer.scene.skyAtmosphere.show = false;
     viewer.scene.fog.enabled = false;
 
-    // Data sources
     const layerNames = ['aircraft', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'cities'];
     layerNames.forEach((name) => {
       const ds = new Cesium.CustomDataSource(name);
@@ -105,7 +103,6 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
       dsRefs.current[name] = ds;
     });
 
-    // Click handler
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((click: any) => {
       const picked = viewer.scene.pick(click.position);
@@ -137,7 +134,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     };
   }, []);
 
-  // Aircraft layer - white plane dots
+  // Aircraft layer
   useEffect(() => {
     const ds = dsRefs.current['aircraft'];
     if (!ds) return;
@@ -146,13 +143,18 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     if (!layers.aircraft) return;
 
     aircraft.forEach((a) => {
+      const isMil = layers.militaryFlights && !!a.militaryClassification;
       ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, a.altitude),
+        position: Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, a.altitude || 1000),
         point: {
-          pixelSize: 4,
-          color: Cesium.Color.WHITE,
-          outlineColor: Cesium.Color.fromCssColorString('#ffffff60'),
-          outlineWidth: 1,
+          pixelSize: isMil ? 6 : 4,
+          color: isMil
+            ? Cesium.Color.fromCssColorString('#ff8c00')
+            : Cesium.Color.WHITE,
+          outlineColor: isMil
+            ? Cesium.Color.fromCssColorString('#ff8c0060')
+            : Cesium.Color.fromCssColorString('#ffffff60'),
+          outlineWidth: isMil ? 2 : 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.8, 2e7, 0.5),
         },
@@ -162,7 +164,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
         },
       });
     });
-  }, [aircraft, layers.aircraft]);
+  }, [aircraft, layers.aircraft, layers.militaryFlights]);
 
   // Ships layer
   useEffect(() => {
@@ -173,11 +175,8 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     if (!layers.ships) return;
 
     const shipColors: Record<string, string> = {
-      cargo: '#3b82f6',
-      tanker: '#f59e0b',
-      passenger: '#8b5cf6',
-      fishing: '#10b981',
-      military: '#ef4444',
+      cargo: '#3b82f6', tanker: '#f59e0b', passenger: '#8b5cf6',
+      fishing: '#10b981', military: '#ef4444',
     };
 
     SAMPLE_SHIPS.forEach((s) => {
@@ -191,15 +190,12 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.6),
         },
-        properties: {
-          entityType: 'ship',
-          entityData: JSON.stringify(s),
-        },
+        properties: { entityType: 'ship', entityData: JSON.stringify(s) },
       });
     });
   }, [layers.ships]);
 
-  // Satellites layer - amber dots
+  // Satellites layer
   useEffect(() => {
     const ds = dsRefs.current['satellites'];
     if (!ds) return;
@@ -218,10 +214,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.3),
         },
-        properties: {
-          entityType: 'satellite',
-          entityData: JSON.stringify(s),
-        },
+        properties: { entityType: 'satellite', entityData: JSON.stringify(s) },
       });
     });
   }, [satellites, layers.satellites]);
@@ -234,7 +227,6 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     ds.entities.removeAll();
     if (!layers.satellites || !layers.showOrbits) return;
 
-    // Only draw orbits for first 200 sats to keep it performant
     const subset = satellites.slice(0, 200);
     subset.forEach((s) => {
       const coords = computeOrbitPath(s.tle1, s.tle2, 90);
@@ -250,7 +242,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
     });
   }, [satellites, layers.satellites, layers.showOrbits]);
 
-  // Military bases layer - green
+  // Military bases layer
   useEffect(() => {
     const ds = dsRefs.current['bases'];
     if (!ds) return;
@@ -269,15 +261,12 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.6),
         },
-        properties: {
-          entityType: 'base',
-          entityData: JSON.stringify(b),
-        },
+        properties: { entityType: 'base', entityData: JSON.stringify(b) },
       });
     });
   }, [layers.bases]);
 
-  // Conflict zones layer
+  // Conflict zones
   useEffect(() => {
     const ds = dsRefs.current['conflicts'];
     if (!ds) return;
@@ -299,10 +288,7 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
           outlineWidth: 1,
           height: 0,
         },
-        properties: {
-          entityType: 'conflict',
-          entityData: JSON.stringify(z),
-        },
+        properties: { entityType: 'conflict', entityData: JSON.stringify(z) },
       });
     });
   }, [layers.conflicts]);
@@ -342,15 +328,58 @@ export function GlobeView({ layers, aircraft, satellites, onEntitySelect }: Glob
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1, labelDist, 0),
           translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, labelDist, 0),
         },
-        properties: {
-          entityType: 'city',
-          entityData: JSON.stringify(c),
-        },
+        properties: { entityType: 'city', entityData: JSON.stringify(c) },
       });
     });
   }, [layers.cities]);
 
-  return (
-    <div ref={containerRef} className="w-full h-full" />
-  );
+  // Weather radar layer
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    if (!layers.weatherRadar) {
+      if (weatherLayerRef.current) {
+        viewer.imageryLayers.remove(weatherLayerRef.current);
+        weatherLayerRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadRadar = () => {
+      fetch('https://api.rainviewer.com/public/weather-maps.json')
+        .then(r => r.json())
+        .then(data => {
+          if (cancelled) return;
+          if (weatherLayerRef.current) {
+            viewer.imageryLayers.remove(weatherLayerRef.current);
+          }
+          const latest = data.radar.past[data.radar.past.length - 1];
+          const provider = new Cesium.UrlTemplateImageryProvider({
+            url: `https://tilecache.rainviewer.com${latest.path}/256/{z}/{x}/{y}/2/1_1.png`,
+            maximumLevel: 12,
+          });
+          const layer = viewer.imageryLayers.addImageryProvider(provider);
+          layer.alpha = 0.5;
+          weatherLayerRef.current = layer;
+        })
+        .catch(e => console.warn('Weather radar fetch failed:', e));
+    };
+
+    loadRadar();
+    const interval = setInterval(loadRadar, 300000); // 5 min
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      if (weatherLayerRef.current && viewer && !viewer.isDestroyed()) {
+        viewer.imageryLayers.remove(weatherLayerRef.current);
+        weatherLayerRef.current = null;
+      }
+    };
+  }, [layers.weatherRadar]);
+
+  return <div ref={containerRef} className="w-full h-full" />;
 }

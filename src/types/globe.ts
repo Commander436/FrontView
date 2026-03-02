@@ -1,3 +1,5 @@
+export type DisplayMode = 'normal' | 'crt' | 'nvg' | 'flir';
+
 export interface Aircraft {
   icao24: string;
   callsign: string;
@@ -9,6 +11,7 @@ export interface Aircraft {
   heading: number;
   onGround: boolean;
   lastContact: number;
+  militaryClassification?: 'confirmed' | 'probable' | 'unidentified';
 }
 
 export interface SatelliteData {
@@ -77,4 +80,6 @@ export interface LayerVisibility {
   conflicts: boolean;
   cities: boolean;
   showOrbits: boolean;
+  militaryFlights: boolean;
+  weatherRadar: boolean;
 }
