@@ -1,4 +1,5 @@
 export type DisplayMode = 'normal' | 'crt' | 'nvg' | 'flir';
+export type DensityMode = 'sparse' | 'moderate' | 'dense';
 
 export interface Aircraft {
   icao24: string;
@@ -12,6 +13,10 @@ export interface Aircraft {
   onGround: boolean;
   lastContact: number;
   militaryClassification?: 'confirmed' | 'probable' | 'unidentified';
+  airline?: string;
+  aircraftType?: string;
+  model?: string;
+  registration?: string;
 }
 
 export interface SatelliteData {
@@ -82,4 +87,6 @@ export interface LayerVisibility {
   showOrbits: boolean;
   militaryFlights: boolean;
   weatherRadar: boolean;
+  streetTraffic: boolean;
+  buildings: boolean;
 }

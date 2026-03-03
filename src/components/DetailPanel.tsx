@@ -71,6 +71,10 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Callsign" value={a.callsign || 'N/A'} />
           <InfoRow label="ICAO24" value={a.icao24} />
           <InfoRow label="Country" value={a.originCountry} />
+          <InfoRow label="Airline" value={a.airline || 'Unknown'} />
+          <InfoRow label="Type" value={a.aircraftType || 'Unknown'} />
+          <InfoRow label="Model" value={a.model || 'Unknown'} />
+          <InfoRow label="Registration" value={a.registration || 'Unknown'} />
           <InfoRow label="Altitude" value={`${Math.round(a.altitude)} m`} />
           <InfoRow label="Speed" value={`${Math.round(a.velocity)} m/s`} />
           <InfoRow label="Heading" value={`${Math.round(a.heading)}°`} />

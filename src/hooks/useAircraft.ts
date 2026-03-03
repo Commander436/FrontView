@@ -37,6 +37,10 @@ export function useAircraft(enabled: boolean, classifyMilitary: boolean) {
             heading: s[10] || 0,
             onGround: s[8],
             lastContact: s[4] || 0,
+            airline: 'Unknown',
+            aircraftType: 'Unknown',
+            model: 'Unknown',
+            registration: 'Unknown',
           };
           if (classifyMilitary) {
             const cls = classifyAircraft(a.callsign, a.velocity, a.altitude);

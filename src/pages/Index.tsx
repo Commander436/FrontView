@@ -12,6 +12,7 @@ const Index = () => {
     layers, toggleLayer,
     selectedEntity, selectEntity,
     displayMode, setDisplayMode,
+    density, setDensity,
   } = useGlobeState();
 
   const { aircraft } = useAircraft(layers.aircraft, layers.militaryFlights);
@@ -34,6 +35,8 @@ const Index = () => {
         onToggleLayer={toggleLayer}
         displayMode={displayMode}
         onSetDisplayMode={setDisplayMode}
+        density={density}
+        onSetDensity={setDensity}
         aircraftCount={aircraft.length}
         satelliteCount={satellites.length}
         collapsed={leftCollapsed}
@@ -45,13 +48,12 @@ const Index = () => {
             layers={layers}
             aircraft={aircraft}
             satellites={satellites}
+            density={density}
+            displayMode={displayMode}
             onEntitySelect={selectEntity}
           />
         </div>
         <ScopeOverlay mode={displayMode} />
-        {displayMode === 'normal' && (
-          <div className="absolute inset-0 pointer-events-none scanline opacity-20" />
-        )}
       </main>
       <RightPanel
         selectedEntity={selectedEntity}

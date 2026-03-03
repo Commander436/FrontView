@@ -1,8 +1,8 @@
-import { LayerVisibility, DisplayMode } from '@/types/globe';
+import { LayerVisibility, DisplayMode, DensityMode } from '@/types/globe';
 import {
   Shield, Wifi, Clock, Plane, Anchor, Satellite, Building2,
   Swords, MapPin, Orbit, Eye, CloudRain, Crosshair,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Car, Building, Layers,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -11,6 +11,8 @@ interface LeftPanelProps {
   onToggleLayer: (layer: keyof LayerVisibility) => void;
   displayMode: DisplayMode;
   onSetDisplayMode: (mode: DisplayMode) => void;
+  density: DensityMode;
+  onSetDensity: (d: DensityMode) => void;
   aircraftCount: number;
   satelliteCount: number;
   collapsed: boolean;
@@ -31,9 +33,15 @@ const LAYER_CONFIG: { key: keyof LayerVisibility; label: string; icon: any; colo
       { key: 'showOrbits', label: 'SHOW ORBITS', icon: Orbit, color: 'text-neon-amber' },
     ],
   },
-  { key: 'bases', label: 'MIL BASES', icon: Building2, color: 'text-neon-green' },
+  { key: 'bases', label: 'MIL BASES', icon: Shield, color: 'text-neon-green' },
   { key: 'conflicts', label: 'CONFLICTS', icon: Swords, color: 'text-neon-red' },
-  { key: 'cities', label: 'CITIES', icon: MapPin, color: 'text-primary' },
+  {
+    key: 'cities', label: 'CITIES', icon: MapPin, color: 'text-primary',
+    subToggles: [
+      { key: 'streetTraffic', label: 'STREET TRAFFIC', icon: Car, color: 'text-cyan-400' },
+      { key: 'buildings', label: '3D BUILDINGS', icon: Building, color: 'text-purple-400' },
+    ],
+  },
   { key: 'weatherRadar', label: 'WEATHER', icon: CloudRain, color: 'text-sky-400' },
 ];
 
@@ -46,6 +54,7 @@ const DISPLAY_MODES: { value: DisplayMode; label: string }[] = [
 
 export function LeftPanel({
   layers, onToggleLayer, displayMode, onSetDisplayMode,
+  density, onSetDensity,
   aircraftCount, satelliteCount, collapsed, onToggleCollapse,
 }: LeftPanelProps) {
   const [time, setTime] = useState(new Date());
@@ -108,6 +117,23 @@ export function LeftPanel({
               {DISPLAY_MODES.map(m => (
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
+            </select>
+          </div>
+
+          {/* Density */}
+          <div>
+            <div className="text-[9px] font-display uppercase tracking-[0.25em] text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Layers className="w-3 h-3" />
+              DENSITY
+            </div>
+            <select
+              value={density}
+              onChange={e => onSetDensity(e.target.value as DensityMode)}
+              className="w-full bg-secondary/80 border border-border/50 rounded px-2 py-1.5 text-[10px] font-display tracking-wider text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
+            >
+              <option value="sparse">SPARSE (25%)</option>
+              <option value="moderate">MODERATE (50%)</option>
+              <option value="dense">DENSE (100%)</option>
             </select>
           </div>
 
