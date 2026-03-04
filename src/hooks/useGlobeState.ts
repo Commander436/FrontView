@@ -14,6 +14,10 @@ export function useGlobeState() {
     weatherRadar: false,
     streetTraffic: false,
     buildings: false,
+    airports: false,
+    ports: false,
+    energy: false,
+    telecom: false,
   });
 
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null);

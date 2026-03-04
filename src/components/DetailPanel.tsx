@@ -1,5 +1,5 @@
-import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship } from '@/types/globe';
-import { Plane, Satellite, Building2, Swords, Anchor, MapPin } from 'lucide-react';
+import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem } from '@/types/globe';
+import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, Radio } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface DetailPanelProps {
@@ -10,7 +10,7 @@ interface DetailPanelProps {
 function InfoRow({ label, value }: { label: string; value: string | number | undefined }) {
   if (value === undefined || value === '') return null;
   return (
-    <div className="flex justify-between items-center py-1 border-b border-border/30">
+    <div className="flex justify-between items-center py-1 border-b border-border/20">
       <span className="text-muted-foreground text-[9px] uppercase tracking-wider">{label}</span>
       <span className="text-foreground text-[10px] font-mono">{value}</span>
     </div>
@@ -44,6 +44,7 @@ function getIcon(type: string) {
     case 'base': return <Building2 className={cls} />;
     case 'conflict': return <Swords className={cls} />;
     case 'ship': return <Anchor className={cls} />;
+    case 'infrastructure': return <Zap className={cls} />;
     default: return null;
   }
 }
@@ -57,6 +58,7 @@ function getTitle(entity: SelectedEntity): string {
     case 'base': return (d as MilitaryBase).name;
     case 'conflict': return (d as ConflictZone).name;
     case 'ship': return (d as Ship).name;
+    case 'infrastructure': return (d as InfrastructureItem).name;
     default: return 'Unknown';
   }
 }
@@ -79,7 +81,7 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Speed" value={`${Math.round(a.velocity)} m/s`} />
           <InfoRow label="Heading" value={`${Math.round(a.heading)}°`} />
           {a.militaryClassification && (
-            <div className="mt-2 border-t border-border/30 pt-2">
+            <div className="mt-2 border-t border-border/20 pt-2">
               <span className="text-[9px] text-orange-400 uppercase tracking-wider font-display">Military Intel</span>
               <InfoRow label="Classification" value={a.militaryClassification.toUpperCase()} />
             </div>
@@ -114,7 +116,7 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Timezone" value={c.timezone} />
           <InfoRow label="Local Time" value={localTime} />
           <p className="text-muted-foreground text-[9px] mt-2">{c.description}</p>
-          <div className="mt-2 border-t border-border/30 pt-2">
+          <div className="mt-2 border-t border-border/20 pt-2">
             <span className="text-[9px] text-primary uppercase tracking-wider font-display">Weather</span>
             <WeatherInfo lat={c.latitude} lon={c.longitude} />
           </div>
@@ -140,8 +142,8 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Countries" value={z.countries.join(', ')} />
           <p className="text-muted-foreground text-[9px] mt-2">{z.summary}</p>
           {z.recentDevelopments && (
-            <div className="mt-2 border-t border-border/30 pt-2">
-              <span className="text-[9px] text-neon-red uppercase tracking-wider font-display">Recent Intel</span>
+            <div className="mt-2 border-t border-border/20 pt-2">
+              <span className="text-[9px] text-destructive uppercase tracking-wider font-display">Recent Intel</span>
               <p className="text-muted-foreground text-[9px] mt-1">{z.recentDevelopments}</p>
             </div>
           )}
@@ -160,12 +162,23 @@ function renderDetails(entity: SelectedEntity) {
         </>
       );
     }
+    case 'infrastructure': {
+      const inf = d as InfrastructureItem;
+      return (
+        <>
+          <InfoRow label="Type" value={inf.type.replace(/_/g, ' ').toUpperCase()} />
+          <InfoRow label="Category" value={inf.category.toUpperCase()} />
+          <InfoRow label="Country" value={inf.country} />
+          <p className="text-muted-foreground text-[9px] mt-2">{inf.description}</p>
+        </>
+      );
+    }
   }
 }
 
 export function DetailPanel({ entity, onClose }: DetailPanelProps) {
   const severityColor = entity.type === 'conflict'
-    ? (entity.data as ConflictZone).severity === 'high' ? 'text-neon-red' : 'text-neon-amber'
+    ? (entity.data as ConflictZone).severity === 'high' ? 'text-destructive' : 'text-neon-amber'
     : entity.type === 'aircraft' && (entity.data as Aircraft).militaryClassification
       ? 'text-orange-400'
       : 'text-primary';

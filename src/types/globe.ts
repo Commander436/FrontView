@@ -72,9 +72,22 @@ export interface Ship {
   lastUpdate: string;
 }
 
+export type InfraType = 'airport' | 'port' | 'wind_farm' | 'solar_farm' | 'nuclear' | 'hydro' | 'radio_tower' | 'cell_tower' | 'broadcast_tower';
+
+export interface InfrastructureItem {
+  id: string;
+  name: string;
+  type: InfraType;
+  category: 'energy' | 'transport' | 'telecom';
+  latitude: number;
+  longitude: number;
+  country: string;
+  description: string;
+}
+
 export interface SelectedEntity {
-  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship';
-  data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship;
+  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure';
+  data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship | InfrastructureItem;
 }
 
 export interface LayerVisibility {
@@ -89,4 +102,8 @@ export interface LayerVisibility {
   weatherRadar: boolean;
   streetTraffic: boolean;
   buildings: boolean;
+  airports: boolean;
+  ports: boolean;
+  energy: boolean;
+  telecom: boolean;
 }
