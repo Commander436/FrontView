@@ -85,25 +85,56 @@ export interface InfrastructureItem {
   description: string;
 }
 
+export interface GPSInterferenceZone {
+  id: string;
+  name: string;
+  region: string;
+  latitude: number;
+  longitude: number;
+  radius: number;
+  severity: 'high' | 'medium' | 'low';
+  type: 'jamming' | 'spoofing' | 'degradation' | 'ionospheric';
+  source: string;
+  description: string;
+  lastUpdated: string;
+}
+
+export interface InternetBlackout {
+  id: string;
+  country: string;
+  region: string;
+  latitude: number;
+  longitude: number;
+  radius: number;
+  connectivityDrop: number;
+  severity: 'critical' | 'major' | 'moderate';
+  source: string;
+  description: string;
+  duration: string;
+  lastUpdated: string;
+}
+
 export interface SelectedEntity {
-  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure';
-  data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship | InfrastructureItem;
+  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout';
+  data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship | InfrastructureItem | GPSInterferenceZone | InternetBlackout;
 }
 
 export interface LayerVisibility {
   aircraft: boolean;
+  militaryFlights: boolean;
   ships: boolean;
   satellites: boolean;
-  bases: boolean;
-  conflicts: boolean;
-  cities: boolean;
   showOrbits: boolean;
-  militaryFlights: boolean;
-  weatherRadar: boolean;
   streetTraffic: boolean;
-  buildings: boolean;
+  cities: boolean;
   airports: boolean;
   ports: boolean;
   energy: boolean;
   telecom: boolean;
+  bases: boolean;
+  buildings: boolean;
+  weatherRadar: boolean;
+  conflicts: boolean;
+  gpsInterference: boolean;
+  internetBlackouts: boolean;
 }

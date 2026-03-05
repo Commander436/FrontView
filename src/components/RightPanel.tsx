@@ -11,9 +11,9 @@ export function RightPanel({ selectedEntity, onClose }: RightPanelProps) {
   if (!selectedEntity) return null;
 
   return (
-    <aside className="w-80 backdrop-blur-2xl bg-card/60 border-l border-border/30 flex flex-col relative z-40 shrink-0 animate-fade-in">
-      <div className="flex items-center justify-between p-3 border-b border-border/30">
-        <h2 className="text-[10px] font-display uppercase tracking-[0.25em] text-primary text-glow-teal">
+    <aside className="w-80 glass-panel bg-card/50 border-l border-border/20 flex flex-col relative z-40 shrink-0 animate-fade-in">
+      <div className="flex items-center justify-between p-3 border-b border-border/20">
+        <h2 className="text-[10px] font-display uppercase tracking-[0.2em] text-white">
           INTEL REPORT
         </h2>
         <button

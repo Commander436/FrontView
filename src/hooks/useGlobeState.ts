@@ -4,20 +4,22 @@ import { LayerVisibility, SelectedEntity, DisplayMode, DensityMode } from '@/typ
 export function useGlobeState() {
   const [layers, setLayers] = useState<LayerVisibility>({
     aircraft: true,
+    militaryFlights: false,
     ships: true,
     satellites: true,
-    bases: true,
-    conflicts: true,
-    cities: true,
     showOrbits: false,
-    militaryFlights: false,
-    weatherRadar: false,
     streetTraffic: false,
-    buildings: false,
+    cities: true,
     airports: false,
     ports: false,
     energy: false,
     telecom: false,
+    bases: true,
+    buildings: false,
+    weatherRadar: false,
+    conflicts: true,
+    gpsInterference: false,
+    internetBlackouts: false,
   });
 
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null);
