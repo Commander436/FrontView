@@ -1,5 +1,5 @@
-import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem } from '@/types/globe';
-import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, Radio } from 'lucide-react';
+import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem, GPSInterferenceZone, InternetBlackout } from '@/types/globe';
+import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, Radio, SignalZero, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface DetailPanelProps {
@@ -45,6 +45,8 @@ function getIcon(type: string) {
     case 'conflict': return <Swords className={cls} />;
     case 'ship': return <Anchor className={cls} />;
     case 'infrastructure': return <Zap className={cls} />;
+    case 'gps_interference': return <SignalZero className={cls} />;
+    case 'internet_blackout': return <WifiOff className={cls} />;
     default: return null;
   }
 }
@@ -59,6 +61,8 @@ function getTitle(entity: SelectedEntity): string {
     case 'conflict': return (d as ConflictZone).name;
     case 'ship': return (d as Ship).name;
     case 'infrastructure': return (d as InfrastructureItem).name;
+    case 'gps_interference': return (d as GPSInterferenceZone).name;
+    case 'internet_blackout': return `${(d as InternetBlackout).country} Blackout`;
     default: return 'Unknown';
   }
 }
@@ -115,7 +119,10 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Tier" value={`Tier ${c.tier}`} />
           <InfoRow label="Timezone" value={c.timezone} />
           <InfoRow label="Local Time" value={localTime} />
-          <p className="text-muted-foreground text-[9px] mt-2">{c.description}</p>
+          <div className="mt-2 border-t border-border/20 pt-2">
+            <span className="text-[9px] text-primary uppercase tracking-wider font-display">Intel Summary</span>
+            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{c.description}</p>
+          </div>
           <div className="mt-2 border-t border-border/20 pt-2">
             <span className="text-[9px] text-primary uppercase tracking-wider font-display">Weather</span>
             <WeatherInfo lat={c.latitude} lon={c.longitude} />
@@ -129,7 +136,10 @@ function renderDetails(entity: SelectedEntity) {
         <>
           <InfoRow label="Country" value={b.country} />
           <InfoRow label="Branch" value={b.branch} />
-          <p className="text-muted-foreground text-[9px] mt-2">{b.description}</p>
+          <div className="mt-2 border-t border-border/20 pt-2">
+            <span className="text-[9px] text-neon-green uppercase tracking-wider font-display">Intel Briefing</span>
+            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{b.description}</p>
+          </div>
         </>
       );
     }
@@ -140,11 +150,11 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Region" value={z.region} />
           <InfoRow label="Severity" value={z.severity.toUpperCase()} />
           <InfoRow label="Countries" value={z.countries.join(', ')} />
-          <p className="text-muted-foreground text-[9px] mt-2">{z.summary}</p>
+          <p className="text-muted-foreground text-[9px] mt-2 leading-relaxed">{z.summary}</p>
           {z.recentDevelopments && (
             <div className="mt-2 border-t border-border/20 pt-2">
               <span className="text-[9px] text-destructive uppercase tracking-wider font-display">Recent Intel</span>
-              <p className="text-muted-foreground text-[9px] mt-1">{z.recentDevelopments}</p>
+              <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed">{z.recentDevelopments}</p>
             </div>
           )}
         </>
@@ -169,7 +179,44 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Type" value={inf.type.replace(/_/g, ' ').toUpperCase()} />
           <InfoRow label="Category" value={inf.category.toUpperCase()} />
           <InfoRow label="Country" value={inf.country} />
-          <p className="text-muted-foreground text-[9px] mt-2">{inf.description}</p>
+          <div className="mt-2 border-t border-border/20 pt-2">
+            <span className="text-[9px] text-primary uppercase tracking-wider font-display">Intel Dossier</span>
+            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{inf.description}</p>
+          </div>
+        </>
+      );
+    }
+    case 'gps_interference': {
+      const g = d as GPSInterferenceZone;
+      return (
+        <>
+          <InfoRow label="Region" value={g.region} />
+          <InfoRow label="Severity" value={g.severity.toUpperCase()} />
+          <InfoRow label="Type" value={g.type.toUpperCase()} />
+          <InfoRow label="Source" value={g.source} />
+          <InfoRow label="Last Updated" value={g.lastUpdated} />
+          <div className="mt-2 border-t border-border/20 pt-2">
+            <span className="text-[9px] text-orange-400 uppercase tracking-wider font-display">SIGINT Analysis</span>
+            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{g.description}</p>
+          </div>
+        </>
+      );
+    }
+    case 'internet_blackout': {
+      const ib = d as InternetBlackout;
+      return (
+        <>
+          <InfoRow label="Country" value={ib.country} />
+          <InfoRow label="Region" value={ib.region} />
+          <InfoRow label="Connectivity Drop" value={`${ib.connectivityDrop}%`} />
+          <InfoRow label="Severity" value={ib.severity.toUpperCase()} />
+          <InfoRow label="Source" value={ib.source} />
+          <InfoRow label="Duration" value={ib.duration} />
+          <InfoRow label="Last Updated" value={ib.lastUpdated} />
+          <div className="mt-2 border-t border-border/20 pt-2">
+            <span className="text-[9px] text-red-400 uppercase tracking-wider font-display">Cyber Intel</span>
+            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{ib.description}</p>
+          </div>
         </>
       );
     }
@@ -181,14 +228,18 @@ export function DetailPanel({ entity, onClose }: DetailPanelProps) {
     ? (entity.data as ConflictZone).severity === 'high' ? 'text-destructive' : 'text-neon-amber'
     : entity.type === 'aircraft' && (entity.data as Aircraft).militaryClassification
       ? 'text-orange-400'
-      : 'text-primary';
+      : entity.type === 'gps_interference'
+        ? 'text-orange-400'
+        : entity.type === 'internet_blackout'
+          ? 'text-red-400'
+          : 'text-primary';
 
   return (
     <div className="space-y-0.5">
       <div className="flex items-center gap-2 mb-3">
         <span className={severityColor}>{getIcon(entity.type)}</span>
         <div>
-          <div className="text-[8px] uppercase tracking-wider text-muted-foreground">{entity.type}</div>
+          <div className="text-[8px] uppercase tracking-wider text-muted-foreground">{entity.type.replace(/_/g, ' ')}</div>
           <div className="text-xs font-display font-semibold text-foreground">{getTitle(entity)}</div>
         </div>
       </div>
