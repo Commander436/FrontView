@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, Car, Building, Layers,
   Zap, Radio, Ship, Factory, ChevronDown,
   Navigation, Globe, Box, BarChart3,
-  WifiOff, SignalZero,
+  WifiOff, SignalZero, Camera, ShieldAlert,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -22,7 +22,6 @@ interface LeftPanelProps {
   onToggleCollapse: () => void;
 }
 
-// --- Category definitions ---
 interface ToggleItem {
   key: keyof LayerVisibility;
   label: string;
@@ -62,6 +61,8 @@ const DATA_LAYER_TOGGLES: ToggleItem[] = [
   { key: 'conflicts', label: 'CONFLICTS', icon: Swords, color: 'text-neon-red' },
   { key: 'gpsInterference', label: 'GPS INTERFERENCE', icon: SignalZero, color: 'text-orange-400' },
   { key: 'internetBlackouts', label: 'INTERNET BLACKOUTS', icon: WifiOff, color: 'text-red-400' },
+  { key: 'airspaceClosures', label: 'AIRSPACE CLOSURES', icon: ShieldAlert, color: 'text-rose-400' },
+  { key: 'liveCameras', label: 'LIVE CAMERAS', icon: Camera, color: 'text-emerald-400' },
 ];
 
 const DISPLAY_MODES: { value: DisplayMode; label: string }[] = [
@@ -276,7 +277,7 @@ export function LeftPanel({
           <div className="mt-auto pt-3 border-t border-border/20">
             <div className="text-[8px] text-muted-foreground font-mono space-y-0.5">
               <div>SYS: <span className="text-accent">OPERATIONAL</span></div>
-              <div>FEEDS: <span className="text-primary">12 ACTIVE</span></div>
+              <div>FEEDS: <span className="text-primary">14 ACTIVE</span></div>
               <div>ENC: <span className="text-accent">AES-256</span></div>
             </div>
           </div>

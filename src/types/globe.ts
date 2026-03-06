@@ -114,9 +114,38 @@ export interface InternetBlackout {
   lastUpdated: string;
 }
 
+export interface AirspaceClosure {
+  id: string;
+  name: string;
+  type: 'restricted' | 'danger' | 'prohibited';
+  polygon: [number, number][]; // [lon, lat] pairs
+  lowerLimit: string;
+  upperLimit: string;
+  status: 'active' | 'inactive' | 'unknown';
+  validFrom?: string;
+  validTo?: string;
+  source: string;
+  description: string;
+}
+
+export interface LiveCamera {
+  id: string;
+  name: string;
+  type: 'traffic' | 'city' | 'harbor' | 'weather' | 'scenic';
+  latitude: number;
+  longitude: number;
+  city: string;
+  country: string;
+  provider: string;
+  streamUrl: string;
+  thumbnailUrl?: string;
+  status: 'online' | 'offline';
+  description: string;
+}
+
 export interface SelectedEntity {
-  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout';
-  data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship | InfrastructureItem | GPSInterferenceZone | InternetBlackout;
+  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout' | 'airspace_closure' | 'live_camera';
+  data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship | InfrastructureItem | GPSInterferenceZone | InternetBlackout | AirspaceClosure | LiveCamera;
 }
 
 export interface LayerVisibility {
@@ -137,4 +166,6 @@ export interface LayerVisibility {
   conflicts: boolean;
   gpsInterference: boolean;
   internetBlackouts: boolean;
+  airspaceClosures: boolean;
+  liveCameras: boolean;
 }

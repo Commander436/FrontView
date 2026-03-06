@@ -1,5 +1,5 @@
-import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem, GPSInterferenceZone, InternetBlackout } from '@/types/globe';
-import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, Radio, SignalZero, WifiOff } from 'lucide-react';
+import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem, GPSInterferenceZone, InternetBlackout, AirspaceClosure, LiveCamera } from '@/types/globe';
+import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, Radio, SignalZero, WifiOff, ShieldAlert, Camera, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface DetailPanelProps {
@@ -47,6 +47,8 @@ function getIcon(type: string) {
     case 'infrastructure': return <Zap className={cls} />;
     case 'gps_interference': return <SignalZero className={cls} />;
     case 'internet_blackout': return <WifiOff className={cls} />;
+    case 'airspace_closure': return <ShieldAlert className={cls} />;
+    case 'live_camera': return <Camera className={cls} />;
     default: return null;
   }
 }
@@ -63,6 +65,8 @@ function getTitle(entity: SelectedEntity): string {
     case 'infrastructure': return (d as InfrastructureItem).name;
     case 'gps_interference': return (d as GPSInterferenceZone).name;
     case 'internet_blackout': return `${(d as InternetBlackout).country} Blackout`;
+    case 'airspace_closure': return (d as AirspaceClosure).name;
+    case 'live_camera': return (d as LiveCamera).name;
     default: return 'Unknown';
   }
 }
@@ -220,6 +224,61 @@ function renderDetails(entity: SelectedEntity) {
         </>
       );
     }
+    case 'airspace_closure': {
+      const ac = d as AirspaceClosure;
+      const statusColor = ac.status === 'active' ? 'text-red-400' : ac.status === 'inactive' ? 'text-green-400' : 'text-yellow-400';
+      return (
+        <>
+          <InfoRow label="Airspace ID" value={ac.name} />
+          <InfoRow label="Type" value={ac.type.toUpperCase()} />
+          <InfoRow label="Lower Limit" value={ac.lowerLimit} />
+          <InfoRow label="Upper Limit" value={ac.upperLimit} />
+          <div className="flex justify-between items-center py-1 border-b border-border/20">
+            <span className="text-muted-foreground text-[9px] uppercase tracking-wider">Status</span>
+            <span className={`text-[10px] font-mono font-bold ${statusColor}`}>{ac.status.toUpperCase()}</span>
+          </div>
+          {ac.validFrom && <InfoRow label="Valid From" value={new Date(ac.validFrom).toUTCString()} />}
+          {ac.validTo && <InfoRow label="Valid To" value={new Date(ac.validTo).toUTCString()} />}
+          <InfoRow label="Source" value={ac.source} />
+          <div className="mt-2 border-t border-border/20 pt-2">
+            <span className="text-[9px] text-rose-400 uppercase tracking-wider font-display">Airspace Intel</span>
+            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{ac.description}</p>
+          </div>
+        </>
+      );
+    }
+    case 'live_camera': {
+      const cam = d as LiveCamera;
+      const statusColor = cam.status === 'online' ? 'text-green-400' : 'text-red-400';
+      return (
+        <>
+          <InfoRow label="Type" value={cam.type.toUpperCase()} />
+          <InfoRow label="Location" value={`${cam.city}, ${cam.country}`} />
+          <InfoRow label="Provider" value={cam.provider} />
+          <div className="flex justify-between items-center py-1 border-b border-border/20">
+            <span className="text-muted-foreground text-[9px] uppercase tracking-wider">Status</span>
+            <span className={`text-[10px] font-mono font-bold ${statusColor}`}>
+              {cam.status === 'online' ? '● ONLINE' : '○ OFFLINE'}
+            </span>
+          </div>
+          <div className="mt-2 border-t border-border/20 pt-2">
+            <span className="text-[9px] text-emerald-400 uppercase tracking-wider font-display">Camera Intel</span>
+            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{cam.description}</p>
+          </div>
+          {cam.status === 'online' && (
+            <a
+              href={cam.streamUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-display uppercase tracking-wider hover:bg-emerald-500/30 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Open Live Feed
+            </a>
+          )}
+        </>
+      );
+    }
   }
 }
 
@@ -232,7 +291,11 @@ export function DetailPanel({ entity, onClose }: DetailPanelProps) {
         ? 'text-orange-400'
         : entity.type === 'internet_blackout'
           ? 'text-red-400'
-          : 'text-primary';
+          : entity.type === 'airspace_closure'
+            ? 'text-rose-400'
+            : entity.type === 'live_camera'
+              ? 'text-emerald-400'
+              : 'text-primary';
 
   return (
     <div className="space-y-0.5">

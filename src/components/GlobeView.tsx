@@ -7,36 +7,66 @@ import { SAMPLE_SHIPS } from '@/data/ships';
 import { INFRASTRUCTURE } from '@/data/infrastructure';
 import { GPS_INTERFERENCE_ZONES } from '@/data/gpsInterference';
 import { INTERNET_BLACKOUTS } from '@/data/internetBlackouts';
+import { AIRSPACE_CLOSURES } from '@/data/airspaceClosures';
+import { LIVE_CAMERAS } from '@/data/liveCameras';
 import { twoline2satrec, propagate, gstime, eciToGeodetic } from 'satellite.js';
 
 declare const Cesium: any;
 
-// ---- SVG Icon Data URIs ----
+// ---- Improved SVG Icon Data URIs ----
 const mkIcon = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
-const ICON_PLANE = mkIcon('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M10 2L12 8L18 10L12 12L10 18L8 12L2 10L8 8Z" fill="white"/></svg>');
-const ICON_MIL_PLANE = mkIcon('<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M10 2L12 8L18 10L12 12L10 18L8 12L2 10L8 8Z" fill="#ff8c00"/></svg>');
-const ICON_SAT = mkIcon('<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><polygon points="6,0 12,6 6,12 0,6" fill="#f59e0b"/></svg>');
-const ICON_BASE = mkIcon('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><polygon points="8,0 10,6 16,6 11,10 13,16 8,12 3,16 5,10 0,6 6,6" fill="#39ff14"/></svg>');
-const ICON_AIRPORT = mkIcon('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M7 1L9 5L13 7L9 9L7 13L5 9L1 7L5 5Z" fill="#7dd3fc"/></svg>');
-const ICON_PORT = mkIcon('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M7 2L12 10L2 10Z" fill="#60a5fa"/></svg>');
-const ICON_ENERGY = mkIcon('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M8 1L5 7H9L6 13" stroke="#facc15" fill="none" stroke-width="1.5"/></svg>');
-const ICON_TELECOM = mkIcon('<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="3" fill="none" stroke="#a78bfa" stroke-width="1"/><circle cx="7" cy="7" r="5.5" fill="none" stroke="#a78bfa" stroke-width="0.7"/><circle cx="7" cy="7" r="1.5" fill="#a78bfa"/></svg>');
+
+// Civil aircraft — sleek airliner silhouette
+const ICON_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="white" stroke="white" stroke-width="0.3"><path d="M12 2L14 8H20L14.5 12L16 20H12L10 15L4 17L6 12L4 7H10Z"/></g></svg>`);
+
+// Military aircraft — angular fighter silhouette
+const ICON_MIL_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="#ff8c00" stroke="#ff6600" stroke-width="0.5"><path d="M12 1L15 9H22L15 13L17 22H12L10 16L2 18L5 12L2 6H10Z"/></g></svg>`);
+
+// Satellite — solar panel silhouette
+const ICON_SAT = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#f59e0b" stroke="#d97706" stroke-width="0.3"><rect x="1" y="6" width="5" height="4" rx="0.5"/><rect x="10" y="6" width="5" height="4" rx="0.5"/><rect x="6" y="5" width="4" height="6" rx="1" fill="#fbbf24"/><circle cx="8" cy="8" r="1.5" fill="#d97706"/></g></svg>`);
+
+// Military base — shield + star
+const ICON_BASE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M9 1L16 5V10C16 14 12.5 17 9 17C5.5 17 2 14 2 10V5Z" fill="#39ff1440" stroke="#39ff14" stroke-width="1"/><polygon points="9,5 10.2,7.5 13,7.8 11,9.7 11.5,12.5 9,11.2 6.5,12.5 7,9.7 5,7.8 7.8,7.5" fill="#39ff14"/></svg>`);
+
+// City — skyline silhouette
+const ICON_CITY = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.3"><rect x="2" y="8" width="3" height="7"/><rect x="6" y="4" width="4" height="11"/><rect x="11" y="6" width="3" height="9"/><rect x="7" y="1" width="2" height="3" fill="#94a3b8"/></g></svg>`);
+
+// Airport — runway icon
+const ICON_AIRPORT = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#7dd3fc" stroke="#38bdf8" stroke-width="0.4"><path d="M8 1L11 6H14L10 10L12 15H8L6 11L2 13L4 9L2 5H6Z"/></g></svg>`);
+
+// Port — anchor / crane icon
+const ICON_PORT = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="none" stroke="#60a5fa" stroke-width="1.2"><circle cx="8" cy="4" r="2"/><line x1="8" y1="6" x2="8" y2="14"/><path d="M4 14C4 11 8 10 8 10C8 10 12 11 12 14"/><line x1="5" y1="9" x2="11" y2="9"/></g></svg>`);
+
+// Energy — lightning bolt
+const ICON_ENERGY_WIND = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="none" stroke="#facc15" stroke-width="1"><line x1="8" y1="2" x2="8" y2="14"/><line x1="8" y1="2" x2="3" y2="8"/><line x1="8" y1="2" x2="13" y2="8"/><line x1="8" y1="2" x2="8" y2="8" stroke-dasharray="1 1"/></g></svg>`);
+const ICON_ENERGY_SOLAR = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#facc15" stroke="#eab308" stroke-width="0.4"><rect x="2" y="6" width="12" height="8" rx="1"/><line x1="2" y1="10" x2="14" y2="10" stroke="#eab308" stroke-width="0.5"/><line x1="6" y1="6" x2="6" y2="14" stroke="#eab308" stroke-width="0.5"/><line x1="10" y1="6" x2="10" y2="14" stroke="#eab308" stroke-width="0.5"/></g></svg>`);
+const ICON_ENERGY_NUCLEAR = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="none" stroke="#facc15" stroke-width="1"><circle cx="8" cy="8" r="2"/><circle cx="8" cy="8" r="5"/><path d="M8 3L10 6H6Z" fill="#facc15"/><path d="M12 11L9 9L11 7Z" fill="#facc15"/><path d="M4 11L7 9L5 7Z" fill="#facc15"/></g></svg>`);
+const ICON_ENERGY_HYDRO = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#38bdf8" stroke="#0ea5e9" stroke-width="0.5"><path d="M2 4L14 4L14 12L2 12Z" fill="#38bdf820"/><path d="M4 8Q6 5 8 8Q10 11 12 8" stroke="#38bdf8" stroke-width="1.2" fill="none"/></g></svg>`);
+
+// Telecom — tower with signal waves
+const ICON_TELECOM = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="none" stroke="#a78bfa" stroke-width="0.8"><line x1="8" y1="4" x2="8" y2="14"/><line x1="6" y1="14" x2="10" y2="14"/><line x1="5" y1="11" x2="11" y2="11"/><path d="M4 6C5.5 3 10.5 3 12 6" stroke-width="1"/><path d="M5 8C6 6 10 6 11 8" stroke-width="0.8"/><circle cx="8" cy="4" r="1.2" fill="#a78bfa"/></g></svg>`);
+
+// Camera icon
+const ICON_CAMERA = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#34d399" stroke="#10b981" stroke-width="0.5"><rect x="2" y="4" width="12" height="9" rx="1.5"/><circle cx="8" cy="8.5" r="2.5" fill="none" stroke-width="1"/><circle cx="8" cy="8.5" r="1" fill="#34d399"/><rect x="6" y="2" width="4" height="2" rx="0.5"/></g></svg>`);
 
 const SHIP_COLORS: Record<string, string> = { cargo: '#3b82f6', tanker: '#f59e0b', passenger: '#8b5cf6', fishing: '#10b981', military: '#ef4444' };
 function makeShipIcon(type: string) {
   const c = SHIP_COLORS[type] || '#3b82f6';
-  return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M7 2L12 10L2 10Z" fill="${c}"/></svg>`);
+  return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M8 2L13 10H3Z" fill="${c}" stroke="${c}" stroke-width="0.3"/><line x1="8" y1="10" x2="8" y2="14" stroke="${c}" stroke-width="1"/></svg>`);
 }
 
 function getInfraIcon(type: string) {
   if (type === 'airport') return ICON_AIRPORT;
   if (type === 'port') return ICON_PORT;
+  if (type === 'wind_farm') return ICON_ENERGY_WIND;
+  if (type === 'solar_farm') return ICON_ENERGY_SOLAR;
+  if (type === 'nuclear') return ICON_ENERGY_NUCLEAR;
+  if (type === 'hydro') return ICON_ENERGY_HYDRO;
   if (type === 'radio_tower' || type === 'cell_tower' || type === 'broadcast_tower') return ICON_TELECOM;
-  return ICON_ENERGY;
+  return ICON_ENERGY_WIND;
 }
 
 // ---- Helpers ----
-// Density only used at spawn time for persistent entities
 function passDensity(id: string, density: DensityMode): boolean {
   if (density === 'dense') return true;
   let hash = 0;
@@ -87,10 +117,10 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
   const dsRefs = useRef<Record<string, any>>({});
   const weatherLayerRef = useRef<any>(null);
 
-  // Persistent entity maps — NEVER clear these on update, only on layer disable
+  // Persistent entity maps
   const aircraftEntities = useRef<Map<string, any>>(new Map());
   const aircraftLastSeen = useRef<Map<string, number>>(new Map());
-  const aircraftSpawnDensity = useRef<Set<string>>(new Set()); // tracks which passed density at spawn
+  const aircraftSpawnDensity = useRef<Set<string>>(new Set());
   const satEntities = useRef<Map<string, any>>(new Map());
   const satSpawnDensity = useRef<Set<string>>(new Set());
 
@@ -137,7 +167,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     viewer.clock.shouldAnimate = true;
     viewer.camera.percentageChanged = 0.05;
 
-    const layerNames = ['aircraft', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts'];
+    const layerNames = ['aircraft', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts', 'airspaceClosures', 'liveCameras'];
     layerNames.forEach(name => {
       const ds = new Cesium.CustomDataSource(name);
       viewer.dataSources.add(ds);
@@ -169,7 +199,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     };
   }, []);
 
-  // ========== AIRCRAFT (persistent entities, spawn-only density) ==========
+  // ========== AIRCRAFT (persistent entities, spawn-only density, permanent availability) ==========
   useEffect(() => {
     const ds = dsRefs.current['aircraft'];
     const viewer = viewerRef.current;
@@ -177,6 +207,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     ds.show = layers.aircraft;
 
     if (!layers.aircraft) {
+      // Only hide when layer is fully disabled
       ds.entities.removeAll();
       aircraftEntities.current.clear();
       aircraftLastSeen.current.clear();
@@ -197,7 +228,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
       const newPos = Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, Math.max(a.altitude, 500));
 
       if (existing) {
-        // Always update existing entities — never re-check density
+        // Update existing — never re-check density, never recreate
         const posProperty = existing.position;
         if (posProperty && posProperty.addSample) {
           posProperty.addSample(future, newPos);
@@ -211,8 +242,8 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
         existing.billboard.rotation = Cesium.Math.toRadians(-(a.heading || 0));
         existing.properties.entityData = JSON.stringify(a);
       } else {
-        // New entity — apply density filter ONLY at spawn
-        if (!passDensity(a.icao24, density)) return;
+        // New entity — density filter at spawn only; never filter military
+        if (isMil ? false : !passDensity(a.icao24, density)) return;
         aircraftSpawnDensity.current.add(a.icao24);
 
         const posProperty = new Cesium.SampledPositionProperty();
@@ -221,9 +252,10 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
         const entity = ds.entities.add({
           id: `ac-${a.icao24}`,
           position: posProperty,
+          // No availability set = permanent (avoids the 1-second vanish bug)
           billboard: {
             image: isMil ? ICON_MIL_PLANE : ICON_PLANE,
-            width: isMil ? 20 : 14, height: isMil ? 20 : 14,
+            width: isMil ? 22 : 16, height: isMil ? 22 : 16,
             rotation: Cesium.Math.toRadians(-(a.heading || 0)),
             alignedAxis: Cesium.Cartesian3.UNIT_Z,
             disableDepthTestDistance: 0,
@@ -261,7 +293,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0),
         billboard: {
-          image: makeShipIcon(s.type), width: 14, height: 14,
+          image: makeShipIcon(s.type), width: 16, height: 16,
           disableDepthTestDistance: 0,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.5),
         },
@@ -270,7 +302,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     });
   }, [layers.ships, density]);
 
-  // ========== SATELLITES (persistent entities, spawn-only density) ==========
+  // ========== SATELLITES (persistent entities, spawn-only density, permanent availability) ==========
   useEffect(() => {
     const ds = dsRefs.current['satellites'];
     const viewer = viewerRef.current;
@@ -296,7 +328,6 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
       const existing = satEntities.current.get(sid);
 
       if (existing) {
-        // Always update — never re-check density
         const posProperty = existing.position;
         if (posProperty && posProperty.addSample) {
           posProperty.addSample(future, newPos);
@@ -308,7 +339,6 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
         }
         existing.properties.entityData = JSON.stringify(s);
       } else {
-        // New entity — density only at spawn
         if (!passDensity(sid, density)) return;
         satSpawnDensity.current.add(sid);
 
@@ -319,7 +349,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
           id: `sat-${sid}`,
           position: posProperty,
           billboard: {
-            image: ICON_SAT, width: 10, height: 10,
+            image: ICON_SAT, width: 14, height: 14,
             disableDepthTestDistance: 0,
             scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.3),
           },
@@ -329,7 +359,6 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
       }
     });
 
-    // Remove satellites no longer in feed (immediate for sats since TLE updates are infrequent)
     for (const [id] of satEntities.current) {
       if (!currentIds.has(id)) {
         const entity = satEntities.current.get(id);
@@ -376,7 +405,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(b.longitude, b.latitude, 0),
         billboard: {
-          image: ICON_BASE, width: 16, height: 16,
+          image: ICON_BASE, width: 18, height: 18,
           disableDepthTestDistance: 0,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.5),
         },
@@ -425,11 +454,8 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
 
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(c.longitude, c.latitude, 0),
-        point: {
-          pixelSize: size,
-          color: Cesium.Color.fromCssColorString('#e2e8f0'),
-          outlineColor: Cesium.Color.fromCssColorString('#e2e8f060'),
-          outlineWidth: 1,
+        billboard: {
+          image: ICON_CITY, width: size * 2.5, height: size * 2.5,
           disableDepthTestDistance: 0,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, pointDist, c.tier === 1 ? 0.5 : 0),
         },
@@ -477,7 +503,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(item.longitude, item.latitude, 0),
         billboard: {
-          image: getInfraIcon(item.type), width: 14, height: 14,
+          image: getInfraIcon(item.type), width: 16, height: 16,
           disableDepthTestDistance: 0,
           scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 1e7, 0.4),
         },
@@ -569,6 +595,85 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
       });
     });
   }, [layers.internetBlackouts, density, displayMode]);
+
+  // ========== AIRSPACE CLOSURES (polygon borders with live status styling) ==========
+  useEffect(() => {
+    const ds = dsRefs.current['airspaceClosures'];
+    if (!ds) return;
+    ds.show = layers.airspaceClosures;
+    ds.entities.removeAll();
+    if (!layers.airspaceClosures) return;
+
+    AIRSPACE_CLOSURES.forEach(ac => {
+      const coords = ac.polygon.flatMap(([lon, lat]) => [lon, lat]);
+
+      let fillColor: string, outlineColor: string, outlineWidth: number;
+      if (ac.status === 'active') {
+        if (displayMode === 'nvg') { fillColor = '#39ff1430'; outlineColor = '#39ff14'; }
+        else if (displayMode === 'crt') { fillColor = '#00ff4030'; outlineColor = '#00ff40'; }
+        else if (displayMode === 'flir') { fillColor = '#ff440040'; outlineColor = '#ff6600'; }
+        else { fillColor = '#ff333340'; outlineColor = '#ff4444'; }
+        outlineWidth = 2;
+      } else if (ac.status === 'inactive') {
+        fillColor = '#00000000';
+        outlineColor = displayMode === 'nvg' ? '#39ff1440' : displayMode === 'crt' ? '#00ff4040' : '#88888850';
+        outlineWidth = 1;
+      } else {
+        fillColor = '#ffaa0015';
+        outlineColor = displayMode === 'nvg' ? '#39ff1480' : displayMode === 'crt' ? '#00ff4080' : '#ffaa00';
+        outlineWidth = 1;
+      }
+
+      ds.entities.add({
+        polygon: {
+          hierarchy: Cesium.Cartesian3.fromDegreesArray(coords),
+          material: Cesium.Color.fromCssColorString(fillColor),
+          outline: true,
+          outlineColor: Cesium.Color.fromCssColorString(outlineColor),
+          outlineWidth: outlineWidth,
+          height: 0,
+        },
+        properties: { entityType: 'airspace_closure', entityData: JSON.stringify(ac) },
+      });
+    });
+  }, [layers.airspaceClosures, displayMode]);
+
+  // ========== LIVE CAMERAS (zoom-gated) ==========
+  useEffect(() => {
+    const ds = dsRefs.current['liveCameras'];
+    const viewer = viewerRef.current;
+    if (!ds || !viewer) return;
+    ds.show = layers.liveCameras;
+    ds.entities.removeAll();
+    if (!layers.liveCameras) return;
+
+    // Initial load of all cameras — visibility controlled by scaleByDistance
+    LIVE_CAMERAS.forEach(cam => {
+      if (!passDensity(cam.id, density)) return;
+      
+      const statusDot = cam.status === 'online' ? '●' : '○';
+      ds.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(cam.longitude, cam.latitude, 50),
+        billboard: {
+          image: ICON_CAMERA, width: 16, height: 16,
+          disableDepthTestDistance: 0,
+          // Only show when zoomed to city level (~500km)
+          scaleByDistance: new Cesium.NearFarScalar(1e4, 1.5, 5e5, 0),
+        },
+        label: {
+          text: `${statusDot} ${cam.name}`, font: '9px Orbitron',
+          fillColor: Cesium.Color.fromCssColorString(cam.status === 'online' ? '#34d399' : '#888888'),
+          outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          disableDepthTestDistance: 0,
+          scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 3e5, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(1e4, 1, 3e5, 0),
+        },
+        properties: { entityType: 'live_camera', entityData: JSON.stringify(cam) },
+      });
+    });
+  }, [layers.liveCameras, density]);
 
   // ========== WEATHER RADAR ==========
   useEffect(() => {
@@ -666,7 +771,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     return () => { clearTimeout(timeout); viewer.camera.changed.removeEventListener(checkZoom); ds.entities.removeAll(); };
   }, [layers.buildings, displayMode]);
 
-  // ========== STREET TRAFFIC (road graph, turning, VEH-IDs) ==========
+  // ========== STREET TRAFFIC ==========
   useEffect(() => {
     const viewer = viewerRef.current;
     const ds = dsRefs.current['traffic'];
@@ -697,9 +802,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
             v.progress -= 1;
           }
         }
-        if (v.progress < 0) {
-          v.progress += 1;
-        }
+        if (v.progress < 0) { v.progress += 1; }
         const [lon, lat] = interpolateRoad(v.coords, Math.abs(v.progress));
         v.entity.position = Cesium.Cartesian3.fromDegrees(lon, lat, 3);
       });

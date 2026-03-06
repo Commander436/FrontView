@@ -20,6 +20,8 @@ export function useGlobeState() {
     conflicts: true,
     gpsInterference: false,
     internetBlackouts: false,
+    airspaceClosures: false,
+    liveCameras: false,
   });
 
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null);
