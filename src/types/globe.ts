@@ -57,8 +57,11 @@ export interface ConflictZone {
   longitude: number;
   radius: number;
   severity: 'high' | 'medium' | 'low';
+  eventType: 'combat' | 'strike' | 'humanitarian' | 'standoff' | 'thermal';
   summary: string;
   recentDevelopments?: string;
+  timestamp?: string;
+  source?: string;
 }
 
 export interface Ship {
