@@ -97,6 +97,7 @@ export interface GPSInterferenceZone {
   radius: number;
   severity: 'high' | 'medium' | 'low';
   type: 'jamming' | 'spoofing' | 'degradation' | 'ionospheric';
+  interferenceScore: number; // 0-1
   source: string;
   description: string;
   lastUpdated: string;
