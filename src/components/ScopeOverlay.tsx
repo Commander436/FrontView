@@ -1,26 +1,28 @@
 import { DisplayMode } from '@/types/globe';
 import { useEffect, useState } from 'react';
 
+type ScopeMode = DisplayMode | 'scope-only';
+
 interface ScopeOverlayProps {
-  mode: DisplayMode;
+  mode: ScopeMode;
 }
 
 export function ScopeOverlay({ mode }: ScopeOverlayProps) {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
-    if (mode === 'normal') return;
     const i = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(i);
   }, [mode]);
 
   if (mode === 'normal') return null;
 
-  const modeLabel = mode === 'nvg' ? 'NVG MODE' : mode === 'crt' ? 'CRT MODE' : 'FLIR MODE';
-  const textColor = mode === 'flir' ? 'text-orange-400/80' : 'text-green-400/80';
-  const dimTextColor = mode === 'flir' ? 'text-orange-400/50' : 'text-green-400/50';
-  const lineColor = mode === 'flir' ? 'bg-orange-500/20' : 'bg-green-500/20';
-  const borderColor = mode === 'flir' ? 'border-orange-500/30' : 'border-green-500/30';
+  const isNormal = mode === 'scope-only';
+  const modeLabel = isNormal ? 'SCOPE' : mode === 'nvg' ? 'NVG MODE' : mode === 'crt' ? 'CRT MODE' : 'FLIR MODE';
+  const textColor = mode === 'flir' ? 'text-orange-400/80' : isNormal ? 'text-primary/80' : 'text-green-400/80';
+  const dimTextColor = mode === 'flir' ? 'text-orange-400/50' : isNormal ? 'text-primary/50' : 'text-green-400/50';
+  const lineColor = mode === 'flir' ? 'bg-orange-500/20' : isNormal ? 'bg-primary/15' : 'bg-green-500/20';
+  const borderColor = mode === 'flir' ? 'border-orange-500/30' : isNormal ? 'border-primary/20' : 'border-green-500/30';
   const utc = time.toISOString().slice(11, 19);
 
   return (
@@ -29,7 +31,7 @@ export function ScopeOverlay({ mode }: ScopeOverlayProps) {
       <div
         className="absolute inset-0"
         style={{
-          background: 'radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.3) 55%, rgba(0,0,0,0.85) 75%, rgba(0,0,0,0.98) 90%)',
+          background: `radial-gradient(circle at center, transparent 30%, rgba(0,0,0,${isNormal ? '0.15' : '0.3'}) 55%, rgba(0,0,0,${isNormal ? '0.5' : '0.85'}) 75%, rgba(0,0,0,${isNormal ? '0.7' : '0.98'}) 90%)`,
         }}
       />
 
@@ -65,23 +67,27 @@ export function ScopeOverlay({ mode }: ScopeOverlayProps) {
         />
       ))}
 
-      {/* HUD Text */}
-      <div className={`absolute top-6 left-6 font-mono text-[11px] ${textColor} space-y-1`}>
-        <div className="font-bold tracking-widest">{modeLabel}</div>
-        <div className="text-[9px] opacity-70">UTC {utc}</div>
-      </div>
-      <div className={`absolute top-6 right-6 font-mono text-[10px] ${dimTextColor} text-right space-y-1`}>
-        <div>GPS SYNC</div>
-        <div>COORD LOCK</div>
-      </div>
-      <div className={`absolute bottom-6 left-6 font-mono text-[9px] ${dimTextColor}`}>
-        <div>FEED: ACTIVE</div>
-        <div>RES: 1080p</div>
-      </div>
-      <div className={`absolute bottom-6 right-6 font-mono text-[9px] ${dimTextColor} text-right`}>
-        <div>AES-256</div>
-        <div>ENCRYPTED</div>
-      </div>
+      {/* HUD Text — only show in special modes */}
+      {!isNormal && (
+        <>
+          <div className={`absolute top-6 left-6 font-mono text-[11px] ${textColor} space-y-1`}>
+            <div className="font-bold tracking-widest">{modeLabel}</div>
+            <div className="text-[9px] opacity-70">UTC {utc}</div>
+          </div>
+          <div className={`absolute top-6 right-6 font-mono text-[10px] ${dimTextColor} text-right space-y-1`}>
+            <div>GPS SYNC</div>
+            <div>COORD LOCK</div>
+          </div>
+          <div className={`absolute bottom-6 left-6 font-mono text-[9px] ${dimTextColor}`}>
+            <div>FEED: ACTIVE</div>
+            <div>RES: 1080p</div>
+          </div>
+          <div className={`absolute bottom-6 right-6 font-mono text-[9px] ${dimTextColor} text-right`}>
+            <div>AES-256</div>
+            <div>ENCRYPTED</div>
+          </div>
+        </>
+      )}
 
       {/* Scanlines for CRT */}
       {mode === 'crt' && (

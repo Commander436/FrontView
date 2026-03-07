@@ -57,8 +57,11 @@ export interface ConflictZone {
   longitude: number;
   radius: number;
   severity: 'high' | 'medium' | 'low';
+  eventType: 'combat' | 'strike' | 'humanitarian' | 'standoff' | 'thermal';
   summary: string;
   recentDevelopments?: string;
+  timestamp?: string;
+  source?: string;
 }
 
 export interface Ship {
@@ -94,6 +97,7 @@ export interface GPSInterferenceZone {
   radius: number;
   severity: 'high' | 'medium' | 'low';
   type: 'jamming' | 'spoofing' | 'degradation' | 'ionospheric';
+  interferenceScore: number; // 0-1
   source: string;
   description: string;
   lastUpdated: string;
@@ -105,7 +109,7 @@ export interface InternetBlackout {
   region: string;
   latitude: number;
   longitude: number;
-  radius: number;
+  polygon: [number, number][]; // [lon, lat] pairs for country/region polygon
   connectivityDrop: number;
   severity: 'critical' | 'major' | 'moderate';
   source: string;
@@ -168,4 +172,5 @@ export interface LayerVisibility {
   internetBlackouts: boolean;
   airspaceClosures: boolean;
   liveCameras: boolean;
+  scopeOverlay: boolean;
 }

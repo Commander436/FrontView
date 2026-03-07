@@ -189,6 +189,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     viewerRef.current = viewer;
+    (window as any).__cesiumViewer = viewer;
     viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(20, 20, 20000000), duration: 0 });
 
     return () => {
@@ -414,7 +415,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     });
   }, [layers.bases, density]);
 
-  // ========== CONFLICT ZONES ==========
+  // ========== CONFLICT ZONES (point events, no circles) ==========
   useEffect(() => {
     const ds = dsRefs.current['conflicts'];
     if (!ds) return;
@@ -422,16 +423,38 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     ds.entities.removeAll();
     if (!layers.conflicts) return;
 
+    const EVENT_COLORS: Record<string, string> = {
+      combat: '#ff3333', strike: '#ff6600', humanitarian: '#ff9900',
+      standoff: '#ffcc00', thermal: '#ff4400',
+    };
+
     CONFLICT_ZONES.forEach(z => {
       if (!passDensity(z.name, density)) return;
-      const color = z.severity === 'high' ? '#ff333340' : z.severity === 'medium' ? '#f59e0b30' : '#f59e0b18';
-      const outline = z.severity === 'high' ? '#ff3333' : '#f59e0b';
+      const evtColor = EVENT_COLORS[z.eventType || 'combat'] || '#ff3333';
+      const glowAlpha = z.severity === 'high' ? 0.7 : z.severity === 'medium' ? 0.5 : 0.3;
+      // Recency fading: newer = brighter
+      const age = z.timestamp ? (Date.now() - new Date(z.timestamp).getTime()) / 86400000 : 1;
+      const recencyFade = Math.max(0.3, 1 - age * 0.1);
+
       ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(z.longitude, z.latitude, 0),
-        ellipse: {
-          semiMajorAxis: z.radius, semiMinorAxis: z.radius,
-          material: Cesium.Color.fromCssColorString(color),
-          outline: true, outlineColor: Cesium.Color.fromCssColorString(outline), outlineWidth: 1, height: 0,
+        position: Cesium.Cartesian3.fromDegrees(z.longitude, z.latitude, 100),
+        point: {
+          pixelSize: z.severity === 'high' ? 10 : z.severity === 'medium' ? 7 : 5,
+          color: Cesium.Color.fromCssColorString(evtColor).withAlpha(glowAlpha * recencyFade),
+          outlineColor: Cesium.Color.fromCssColorString(evtColor).withAlpha(0.9 * recencyFade),
+          outlineWidth: 2,
+          disableDepthTestDistance: 0,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 2.0, 2e7, 0.5),
+        },
+        label: {
+          text: z.name, font: '9px Orbitron',
+          fillColor: Cesium.Color.fromCssColorString(evtColor).withAlpha(recencyFade),
+          outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          disableDepthTestDistance: 0,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
         },
         properties: { entityType: 'conflict', entityData: JSON.stringify(z) },
       });
@@ -522,7 +545,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     });
   }, [layers.airports, layers.ports, layers.energy, layers.telecom, density]);
 
-  // ========== GPS INTERFERENCE ZONES ==========
+  // ========== GPS INTERFERENCE (hex-grid style, score-based coloring) ==========
   useEffect(() => {
     const ds = dsRefs.current['gpsInterference'];
     if (!ds) return;
@@ -530,36 +553,53 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     ds.entities.removeAll();
     if (!layers.gpsInterference) return;
 
-    const getColor = (severity: string) => {
-      if (displayMode === 'nvg') return severity === 'high' ? '#39ff1450' : '#39ff1425';
-      if (displayMode === 'crt') return severity === 'high' ? '#00ff4050' : '#00ff4025';
-      if (displayMode === 'flir') return severity === 'high' ? '#ff440060' : '#ff440030';
-      return severity === 'high' ? '#ff440050' : severity === 'medium' ? '#ff880035' : '#ff880020';
+    // Score-based color: yellow(0.3) → orange(0.6) → red(0.9+)
+    const scoreColor = (score: number) => {
+      if (displayMode === 'nvg') return `rgba(57,255,20,${score * 0.6})`;
+      if (displayMode === 'crt') return `rgba(0,255,64,${score * 0.5})`;
+      if (displayMode === 'flir') return `rgba(255,${Math.round(200 - score * 180)},0,${score * 0.6})`;
+      const r = Math.min(255, Math.round(255 * score));
+      const g = Math.round(200 * (1 - score));
+      return `rgba(${r},${g},0,${score * 0.5})`;
     };
-    const getOutline = (severity: string) => {
+    const scoreOutline = (score: number) => {
       if (displayMode === 'nvg') return '#39ff14';
       if (displayMode === 'crt') return '#00ff40';
       if (displayMode === 'flir') return '#ff6600';
-      return severity === 'high' ? '#ff4400' : '#ff8800';
+      const r = Math.min(255, Math.round(255 * score));
+      const g = Math.round(180 * (1 - score));
+      return `rgb(${r},${g},0)`;
     };
 
+    // Render each zone as a hexagonal polygon approximation
     GPS_INTERFERENCE_ZONES.forEach(z => {
       if (!passDensity(z.id, density)) return;
+      const score = z.interferenceScore;
+      
+      // Create hex vertices around center
+      const hexCoords: number[] = [];
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i + Math.PI / 6;
+        const dLat = (z.radius / 111000) * Math.cos(angle);
+        const dLon = (z.radius / (111000 * Math.cos(z.latitude * Math.PI / 180))) * Math.sin(angle);
+        hexCoords.push(z.longitude + dLon, z.latitude + dLat);
+      }
+
       ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(z.longitude, z.latitude, 0),
-        ellipse: {
-          semiMajorAxis: z.radius, semiMinorAxis: z.radius,
-          material: Cesium.Color.fromCssColorString(getColor(z.severity)),
+        polygon: {
+          hierarchy: Cesium.Cartesian3.fromDegreesArray(hexCoords),
+          material: Cesium.Color.fromCssColorString(scoreColor(score)),
           outline: true,
-          outlineColor: Cesium.Color.fromCssColorString(getOutline(z.severity)),
-          outlineWidth: 1, height: 0,
+          outlineColor: Cesium.Color.fromCssColorString(scoreOutline(score)),
+          outlineWidth: score > 0.7 ? 2 : 1,
+          height: 0,
         },
         properties: { entityType: 'gps_interference', entityData: JSON.stringify(z) },
       });
     });
   }, [layers.gpsInterference, density, displayMode]);
 
-  // ========== INTERNET BLACKOUTS ==========
+  // ========== INTERNET BLACKOUTS (country/region polygons) ==========
   useEffect(() => {
     const ds = dsRefs.current['internetBlackouts'];
     if (!ds) return;
@@ -567,11 +607,11 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     ds.entities.removeAll();
     if (!layers.internetBlackouts) return;
 
-    const getColor = (severity: string) => {
+    const getFill = (severity: string) => {
       if (displayMode === 'nvg') return severity === 'critical' ? '#00440060' : '#00440035';
       if (displayMode === 'crt') return severity === 'critical' ? '#00220060' : '#00220035';
       if (displayMode === 'flir') return severity === 'critical' ? '#0000cc50' : '#3333aa30';
-      return severity === 'critical' ? '#1a1a1a80' : severity === 'major' ? '#2a2a2a60' : '#3a3a3a40';
+      return severity === 'critical' ? '#1a000080' : severity === 'major' ? '#2a000060' : '#3a000040';
     };
     const getOutline = (severity: string) => {
       if (displayMode === 'nvg') return '#00ff00';
@@ -582,14 +622,17 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
 
     INTERNET_BLACKOUTS.forEach(b => {
       if (!passDensity(b.id, density)) return;
+      if (!b.polygon || b.polygon.length < 3) return;
+
+      const coords = b.polygon.flatMap(([lon, lat]) => [lon, lat]);
       ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(b.longitude, b.latitude, 0),
-        ellipse: {
-          semiMajorAxis: b.radius, semiMinorAxis: b.radius,
-          material: Cesium.Color.fromCssColorString(getColor(b.severity)),
+        polygon: {
+          hierarchy: Cesium.Cartesian3.fromDegreesArray(coords),
+          material: Cesium.Color.fromCssColorString(getFill(b.severity)),
           outline: true,
           outlineColor: Cesium.Color.fromCssColorString(getOutline(b.severity)),
-          outlineWidth: 1, height: 0,
+          outlineWidth: b.severity === 'critical' ? 2 : 1,
+          height: 0,
         },
         properties: { entityType: 'internet_blackout', entityData: JSON.stringify(b) },
       });

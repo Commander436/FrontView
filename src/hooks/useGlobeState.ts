@@ -22,6 +22,7 @@ export function useGlobeState() {
     internetBlackouts: false,
     airspaceClosures: false,
     liveCameras: false,
+    scopeOverlay: false,
   });
 
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null);

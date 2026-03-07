@@ -63,6 +63,7 @@ const DATA_LAYER_TOGGLES: ToggleItem[] = [
   { key: 'internetBlackouts', label: 'INTERNET BLACKOUTS', icon: WifiOff, color: 'text-red-400' },
   { key: 'airspaceClosures', label: 'AIRSPACE CLOSURES', icon: ShieldAlert, color: 'text-rose-400' },
   { key: 'liveCameras', label: 'LIVE CAMERAS', icon: Camera, color: 'text-emerald-400' },
+  { key: 'scopeOverlay', label: 'SCOPE OVERLAY', icon: Crosshair, color: 'text-primary' },
 ];
 
 const DISPLAY_MODES: { value: DisplayMode; label: string }[] = [
