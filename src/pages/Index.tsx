@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { LeftPanel } from '@/components/LeftPanel';
 import { RightPanel } from '@/components/RightPanel';
 import { GlobeView } from '@/components/GlobeView';
@@ -6,6 +6,19 @@ import { ScopeOverlay } from '@/components/ScopeOverlay';
 import { useGlobeState } from '@/hooks/useGlobeState';
 import { useAircraft } from '@/hooks/useAircraft';
 import { useSatellites } from '@/hooks/useSatellites';
+
+declare const Cesium: any;
+
+// Lat/Lon → MGRS approximation (simplified for HUD display)
+function toMGRS(lat: number, lon: number): string {
+  const zoneNum = Math.floor((lon + 180) / 6) + 1;
+  const letters = 'CDEFGHJKLMNPQRSTUVWX';
+  const bandIdx = Math.max(0, Math.min(letters.length - 1, Math.floor((lat + 80) / 8)));
+  const band = letters[bandIdx];
+  const easting = Math.round(((lon - (zoneNum * 6 - 183)) / 6 + 0.5) * 100000) % 100000;
+  const northing = Math.round((lat >= 0 ? lat : lat + 90) / 90 * 10000000) % 100000;
+  return `${zoneNum}${band} ${String(easting).padStart(5, '0')} ${String(northing).padStart(5, '0')}`;
+}
 
 const Index = () => {
   const {
@@ -18,6 +31,25 @@ const Index = () => {
   const { aircraft } = useAircraft(layers.aircraft, layers.militaryFlights);
   const { satellites } = useSatellites(layers.satellites);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
+  const globeViewRef = useRef<{ getViewer: () => any } | null>(null);
+
+  // Camera coordinate tracking
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (typeof Cesium === 'undefined') return;
+      const viewer = (window as any).__cesiumViewer;
+      if (!viewer || viewer.isDestroyed()) return;
+      const carto = viewer.camera.positionCartographic;
+      if (carto) {
+        setCameraCoords({
+          lat: Cesium.Math.toDegrees(carto.latitude),
+          lon: Cesium.Math.toDegrees(carto.longitude),
+        });
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, []);
 
   const globeFilter = useMemo(() => {
     switch (displayMode) {
@@ -27,6 +59,9 @@ const Index = () => {
       default: return 'none';
     }
   }, [displayMode]);
+
+  const showScope = layers.scopeOverlay || displayMode !== 'normal';
+  const hudColor = displayMode === 'flir' ? 'text-orange-400/80' : displayMode === 'nvg' || displayMode === 'crt' ? 'text-green-400/80' : 'text-primary/80';
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-background">
@@ -53,7 +88,14 @@ const Index = () => {
             onEntitySelect={selectEntity}
           />
         </div>
-        <ScopeOverlay mode={displayMode} />
+        {showScope && <ScopeOverlay mode={displayMode === 'normal' ? 'scope-only' : displayMode} />}
+
+        {/* Coordinate HUD — bottom-left tactical readout */}
+        <div className={`absolute bottom-4 left-4 z-30 pointer-events-none font-mono text-[10px] ${hudColor} space-y-0.5`}>
+          <div>LAT {cameraCoords.lat >= 0 ? 'N' : 'S'}{Math.abs(cameraCoords.lat).toFixed(4)}°</div>
+          <div>LON {cameraCoords.lon >= 0 ? 'E' : 'W'}{Math.abs(cameraCoords.lon).toFixed(4)}°</div>
+          <div className="opacity-60">MGRS {toMGRS(cameraCoords.lat, cameraCoords.lon)}</div>
+        </div>
       </main>
       <RightPanel
         selectedEntity={selectedEntity}
