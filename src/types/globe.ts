@@ -109,7 +109,7 @@ export interface InternetBlackout {
   region: string;
   latitude: number;
   longitude: number;
-  radius: number;
+  polygon: [number, number][]; // [lon, lat] pairs for country/region polygon
   connectivityDrop: number;
   severity: 'critical' | 'major' | 'moderate';
   source: string;
