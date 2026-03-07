@@ -598,7 +598,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     });
   }, [layers.gpsInterference, density, displayMode]);
 
-  // ========== INTERNET BLACKOUTS ==========
+  // ========== INTERNET BLACKOUTS (country/region polygons) ==========
   useEffect(() => {
     const ds = dsRefs.current['internetBlackouts'];
     if (!ds) return;
@@ -606,11 +606,11 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     ds.entities.removeAll();
     if (!layers.internetBlackouts) return;
 
-    const getColor = (severity: string) => {
+    const getFill = (severity: string) => {
       if (displayMode === 'nvg') return severity === 'critical' ? '#00440060' : '#00440035';
       if (displayMode === 'crt') return severity === 'critical' ? '#00220060' : '#00220035';
       if (displayMode === 'flir') return severity === 'critical' ? '#0000cc50' : '#3333aa30';
-      return severity === 'critical' ? '#1a1a1a80' : severity === 'major' ? '#2a2a2a60' : '#3a3a3a40';
+      return severity === 'critical' ? '#1a000080' : severity === 'major' ? '#2a000060' : '#3a000040';
     };
     const getOutline = (severity: string) => {
       if (displayMode === 'nvg') return '#00ff00';
@@ -621,14 +621,17 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
 
     INTERNET_BLACKOUTS.forEach(b => {
       if (!passDensity(b.id, density)) return;
+      if (!b.polygon || b.polygon.length < 3) return;
+
+      const coords = b.polygon.flatMap(([lon, lat]) => [lon, lat]);
       ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(b.longitude, b.latitude, 0),
-        ellipse: {
-          semiMajorAxis: b.radius, semiMinorAxis: b.radius,
-          material: Cesium.Color.fromCssColorString(getColor(b.severity)),
+        polygon: {
+          hierarchy: Cesium.Cartesian3.fromDegreesArray(coords),
+          material: Cesium.Color.fromCssColorString(getFill(b.severity)),
           outline: true,
           outlineColor: Cesium.Color.fromCssColorString(getOutline(b.severity)),
-          outlineWidth: 1, height: 0,
+          outlineWidth: b.severity === 'critical' ? 2 : 1,
+          height: 0,
         },
         properties: { entityType: 'internet_blackout', entityData: JSON.stringify(b) },
       });
