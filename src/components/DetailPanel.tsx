@@ -200,6 +200,7 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Region" value={g.region} />
           <InfoRow label="Severity" value={g.severity.toUpperCase()} />
           <InfoRow label="Type" value={g.type.toUpperCase()} />
+          <InfoRow label="Score" value={`${(g.interferenceScore * 100).toFixed(0)}%`} />
           <InfoRow label="Source" value={g.source} />
           <InfoRow label="Last Updated" value={g.lastUpdated} />
           <div className="mt-2 border-t border-border/20 pt-2">
