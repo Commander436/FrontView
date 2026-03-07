@@ -153,7 +153,10 @@ function renderDetails(entity: SelectedEntity) {
         <>
           <InfoRow label="Region" value={z.region} />
           <InfoRow label="Severity" value={z.severity.toUpperCase()} />
+          <InfoRow label="Event Type" value={(z.eventType || 'combat').toUpperCase()} />
           <InfoRow label="Countries" value={z.countries.join(', ')} />
+          {z.source && <InfoRow label="Source" value={z.source} />}
+          {z.timestamp && <InfoRow label="Timestamp" value={new Date(z.timestamp).toUTCString()} />}
           <p className="text-muted-foreground text-[9px] mt-2 leading-relaxed">{z.summary}</p>
           {z.recentDevelopments && (
             <div className="mt-2 border-t border-border/20 pt-2">
