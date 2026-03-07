@@ -414,7 +414,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     });
   }, [layers.bases, density]);
 
-  // ========== CONFLICT ZONES ==========
+  // ========== CONFLICT ZONES (point events, no circles) ==========
   useEffect(() => {
     const ds = dsRefs.current['conflicts'];
     if (!ds) return;
@@ -422,16 +422,38 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     ds.entities.removeAll();
     if (!layers.conflicts) return;
 
+    const EVENT_COLORS: Record<string, string> = {
+      combat: '#ff3333', strike: '#ff6600', humanitarian: '#ff9900',
+      standoff: '#ffcc00', thermal: '#ff4400',
+    };
+
     CONFLICT_ZONES.forEach(z => {
       if (!passDensity(z.name, density)) return;
-      const color = z.severity === 'high' ? '#ff333340' : z.severity === 'medium' ? '#f59e0b30' : '#f59e0b18';
-      const outline = z.severity === 'high' ? '#ff3333' : '#f59e0b';
+      const evtColor = EVENT_COLORS[z.eventType || 'combat'] || '#ff3333';
+      const glowAlpha = z.severity === 'high' ? 0.7 : z.severity === 'medium' ? 0.5 : 0.3;
+      // Recency fading: newer = brighter
+      const age = z.timestamp ? (Date.now() - new Date(z.timestamp).getTime()) / 86400000 : 1;
+      const recencyFade = Math.max(0.3, 1 - age * 0.1);
+
       ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(z.longitude, z.latitude, 0),
-        ellipse: {
-          semiMajorAxis: z.radius, semiMinorAxis: z.radius,
-          material: Cesium.Color.fromCssColorString(color),
-          outline: true, outlineColor: Cesium.Color.fromCssColorString(outline), outlineWidth: 1, height: 0,
+        position: Cesium.Cartesian3.fromDegrees(z.longitude, z.latitude, 100),
+        point: {
+          pixelSize: z.severity === 'high' ? 10 : z.severity === 'medium' ? 7 : 5,
+          color: Cesium.Color.fromCssColorString(evtColor).withAlpha(glowAlpha * recencyFade),
+          outlineColor: Cesium.Color.fromCssColorString(evtColor).withAlpha(0.9 * recencyFade),
+          outlineWidth: 2,
+          disableDepthTestDistance: 0,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 2.0, 2e7, 0.5),
+        },
+        label: {
+          text: z.name, font: '9px Orbitron',
+          fillColor: Cesium.Color.fromCssColorString(evtColor).withAlpha(recencyFade),
+          outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -14),
+          disableDepthTestDistance: 0,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(1e5, 1, 8e6, 0),
         },
         properties: { entityType: 'conflict', entityData: JSON.stringify(z) },
       });
