@@ -189,6 +189,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
     viewerRef.current = viewer;
+    (window as any).__cesiumViewer = viewer;
     viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(20, 20, 20000000), duration: 0 });
 
     return () => {
