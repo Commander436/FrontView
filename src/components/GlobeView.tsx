@@ -544,7 +544,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     });
   }, [layers.airports, layers.ports, layers.energy, layers.telecom, density]);
 
-  // ========== GPS INTERFERENCE ZONES ==========
+  // ========== GPS INTERFERENCE (hex-grid style, score-based coloring) ==========
   useEffect(() => {
     const ds = dsRefs.current['gpsInterference'];
     if (!ds) return;
@@ -552,29 +552,46 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     ds.entities.removeAll();
     if (!layers.gpsInterference) return;
 
-    const getColor = (severity: string) => {
-      if (displayMode === 'nvg') return severity === 'high' ? '#39ff1450' : '#39ff1425';
-      if (displayMode === 'crt') return severity === 'high' ? '#00ff4050' : '#00ff4025';
-      if (displayMode === 'flir') return severity === 'high' ? '#ff440060' : '#ff440030';
-      return severity === 'high' ? '#ff440050' : severity === 'medium' ? '#ff880035' : '#ff880020';
+    // Score-based color: yellow(0.3) → orange(0.6) → red(0.9+)
+    const scoreColor = (score: number) => {
+      if (displayMode === 'nvg') return `rgba(57,255,20,${score * 0.6})`;
+      if (displayMode === 'crt') return `rgba(0,255,64,${score * 0.5})`;
+      if (displayMode === 'flir') return `rgba(255,${Math.round(200 - score * 180)},0,${score * 0.6})`;
+      const r = Math.min(255, Math.round(255 * score));
+      const g = Math.round(200 * (1 - score));
+      return `rgba(${r},${g},0,${score * 0.5})`;
     };
-    const getOutline = (severity: string) => {
+    const scoreOutline = (score: number) => {
       if (displayMode === 'nvg') return '#39ff14';
       if (displayMode === 'crt') return '#00ff40';
       if (displayMode === 'flir') return '#ff6600';
-      return severity === 'high' ? '#ff4400' : '#ff8800';
+      const r = Math.min(255, Math.round(255 * score));
+      const g = Math.round(180 * (1 - score));
+      return `rgb(${r},${g},0)`;
     };
 
+    // Render each zone as a hexagonal polygon approximation
     GPS_INTERFERENCE_ZONES.forEach(z => {
       if (!passDensity(z.id, density)) return;
+      const score = z.interferenceScore;
+      
+      // Create hex vertices around center
+      const hexCoords: number[] = [];
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i + Math.PI / 6;
+        const dLat = (z.radius / 111000) * Math.cos(angle);
+        const dLon = (z.radius / (111000 * Math.cos(z.latitude * Math.PI / 180))) * Math.sin(angle);
+        hexCoords.push(z.longitude + dLon, z.latitude + dLat);
+      }
+
       ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(z.longitude, z.latitude, 0),
-        ellipse: {
-          semiMajorAxis: z.radius, semiMinorAxis: z.radius,
-          material: Cesium.Color.fromCssColorString(getColor(z.severity)),
+        polygon: {
+          hierarchy: Cesium.Cartesian3.fromDegreesArray(hexCoords),
+          material: Cesium.Color.fromCssColorString(scoreColor(score)),
           outline: true,
-          outlineColor: Cesium.Color.fromCssColorString(getOutline(z.severity)),
-          outlineWidth: 1, height: 0,
+          outlineColor: Cesium.Color.fromCssColorString(scoreOutline(score)),
+          outlineWidth: score > 0.7 ? 2 : 1,
+          height: 0,
         },
         properties: { entityType: 'gps_interference', entityData: JSON.stringify(z) },
       });
