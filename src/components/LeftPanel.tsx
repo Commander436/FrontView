@@ -1,7 +1,7 @@
 import { LayerVisibility, DisplayMode, DensityMode } from '@/types/globe';
 import {
   Shield, Wifi, Clock, Plane, Anchor, Satellite,
-  Swords, MapPin, Orbit, Eye, CloudRain, Crosshair,
+  Swords, MapPin, Eye, CloudRain, Crosshair,
   ChevronLeft, ChevronRight, Car, Building, Layers,
   Zap, Radio, Ship, Factory, ChevronDown,
   Navigation, Globe, Box, BarChart3,
@@ -34,12 +34,7 @@ const TRANSPORT_TOGGLES: ToggleItem[] = [
   { key: 'aircraft', label: 'CIVILIAN AIRCRAFT', icon: Plane, color: 'text-foreground' },
   { key: 'militaryFlights', label: 'MILITARY AIRCRAFT', icon: Crosshair, color: 'text-orange-400' },
   { key: 'ships', label: 'SHIPS', icon: Anchor, color: 'text-neon-blue' },
-  {
-    key: 'satellites', label: 'SATELLITES', icon: Satellite, color: 'text-neon-amber',
-    subToggles: [
-      { key: 'showOrbits', label: 'SHOW ORBITS', icon: Orbit, color: 'text-neon-amber' },
-    ],
-  },
+  { key: 'satellites', label: 'SATELLITES', icon: Satellite, color: 'text-neon-amber' },
   { key: 'streetTraffic', label: 'STREET TRAFFIC', icon: Car, color: 'text-cyan-400' },
 ];
 
@@ -47,8 +42,8 @@ const INFRA_TOGGLES: ToggleItem[] = [
   { key: 'cities', label: 'CITIES', icon: MapPin, color: 'text-primary' },
   { key: 'airports', label: 'AIRPORTS', icon: Plane, color: 'text-sky-300' },
   { key: 'ports', label: 'PORTS', icon: Ship, color: 'text-blue-400' },
-  { key: 'energy', label: 'ENERGY', icon: Zap, color: 'text-yellow-400' },
-  { key: 'telecom', label: 'TELECOM', icon: Radio, color: 'text-violet-400' },
+  { key: 'energy', label: 'ENERGY & PIPELINES', icon: Zap, color: 'text-yellow-400' },
+  { key: 'telecom', label: 'TELECOM & CABLES', icon: Radio, color: 'text-violet-400' },
   { key: 'bases', label: 'MILITARY BASES', icon: Shield, color: 'text-neon-green' },
 ];
 
