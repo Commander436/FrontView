@@ -7,7 +7,7 @@ export function useGlobeState() {
     militaryFlights: false,
     ships: true,
     satellites: true,
-    showOrbits: false,
+    showOrbits: false, // kept for type compat but unused — orbits shown on click
     streetTraffic: false,
     cities: true,
     airports: false,
