@@ -13,10 +13,22 @@ export interface Aircraft {
   onGround: boolean;
   lastContact: number;
   militaryClassification?: 'confirmed' | 'probable' | 'unidentified';
+  // ADSBexchange extended fields
   airline?: string;
   aircraftType?: string;
   model?: string;
   registration?: string;
+  squawk?: string;
+  verticalRate?: number;
+  baroAltitude?: number;
+  geoAltitude?: number;
+  trueAirspeed?: number;
+  mach?: number;
+  emergency?: string;
+  positionSource?: string;
+  route?: string;
+  operator?: string;
+  isMilitary?: boolean;
 }
 
 export interface SatelliteData {
@@ -97,7 +109,7 @@ export interface GPSInterferenceZone {
   radius: number;
   severity: 'high' | 'medium' | 'low';
   type: 'jamming' | 'spoofing' | 'degradation' | 'ionospheric';
-  interferenceScore: number; // 0-1
+  interferenceScore: number;
   source: string;
   description: string;
   lastUpdated: string;
@@ -109,7 +121,7 @@ export interface InternetBlackout {
   region: string;
   latitude: number;
   longitude: number;
-  polygon: [number, number][]; // [lon, lat] pairs for country/region polygon
+  polygon: [number, number][];
   connectivityDrop: number;
   severity: 'critical' | 'major' | 'moderate';
   source: string;
@@ -122,7 +134,7 @@ export interface AirspaceClosure {
   id: string;
   name: string;
   type: 'restricted' | 'danger' | 'prohibited';
-  polygon: [number, number][]; // [lon, lat] pairs
+  polygon: [number, number][];
   lowerLimit: string;
   upperLimit: string;
   status: 'active' | 'inactive' | 'unknown';
@@ -157,7 +169,6 @@ export interface LayerVisibility {
   militaryFlights: boolean;
   ships: boolean;
   satellites: boolean;
-  showOrbits: boolean;
   streetTraffic: boolean;
   cities: boolean;
   airports: boolean;
