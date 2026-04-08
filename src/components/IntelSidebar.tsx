@@ -71,21 +71,7 @@ export function IntelSidebar({
                     )}
                     <span className={`ml-auto w-1.5 h-1.5 rounded-full ${layers[key] ? 'bg-accent' : 'bg-muted-foreground/30'}`} />
                   </button>
-                  {/* Orbit sub-toggle under Satellites */}
-                  {key === 'satellites' && layers.satellites && (
-                    <button
-                      onClick={() => onToggleLayer('showOrbits')}
-                      className={`w-full flex items-center gap-2 px-2 py-1 pl-8 rounded text-xs transition-colors ${
-                        layers.showOrbits
-                          ? 'text-neon-amber'
-                          : 'text-muted-foreground hover:bg-secondary/50'
-                      }`}
-                    >
-                      <Orbit className={`w-3 h-3 ${layers.showOrbits ? 'text-neon-amber' : 'opacity-40'}`} />
-                      <span className="font-display tracking-wider text-[9px]">SHOW ORBITS</span>
-                      <span className={`ml-auto w-1.5 h-1.5 rounded-full ${layers.showOrbits ? 'bg-neon-amber' : 'bg-muted-foreground/30'}`} />
-                    </button>
-                  )}
+                  {/* Orbits now shown on satellite click — no global toggle */}
                 </div>
               ))}
             </div>
