@@ -1,5 +1,5 @@
 import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem, GPSInterferenceZone, InternetBlackout, AirspaceClosure, LiveCamera } from '@/types/globe';
-import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, Radio, SignalZero, WifiOff, ShieldAlert, Camera, ExternalLink } from 'lucide-react';
+import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, SignalZero, WifiOff, ShieldAlert, Camera, ExternalLink, Shield, AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface DetailPanelProps {
@@ -7,13 +7,21 @@ interface DetailPanelProps {
   onClose: () => void;
 }
 
-function InfoRow({ label, value }: { label: string; value: string | number | undefined }) {
+function InfoRow({ label, value, highlight }: { label: string; value: string | number | undefined; highlight?: boolean }) {
   if (value === undefined || value === '') return null;
   return (
-    <div className="flex justify-between items-center py-1 border-b border-border/20">
-      <span className="text-muted-foreground text-[9px] uppercase tracking-wider">{label}</span>
-      <span className="text-foreground text-[10px] font-mono">{value}</span>
+    <div className="flex justify-between items-center py-1.5 border-b border-border/10">
+      <span className="text-muted-foreground text-[9px] uppercase tracking-wider font-display">{label}</span>
+      <span className={`text-[10px] font-mono ${highlight ? 'text-primary' : 'text-foreground'}`}>{value}</span>
     </div>
+  );
+}
+
+function Badge({ text, color }: { text: string; color: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-display uppercase tracking-wider border ${color}`}>
+      {text}
+    </span>
   );
 }
 
@@ -25,7 +33,7 @@ function WeatherInfo({ lat, lon }: { lat: number; lon: number }) {
       .then(d => setWeather(d.current_weather))
       .catch(() => {});
   }, [lat, lon]);
-  if (!weather) return <div className="text-muted-foreground text-[9px]">Loading weather…</div>;
+  if (!weather) return <div className="text-muted-foreground text-[9px] animate-pulse">Loading weather…</div>;
   return (
     <>
       <InfoRow label="Temp" value={`${weather.temperature}°C`} />
@@ -71,6 +79,14 @@ function getTitle(entity: SelectedEntity): string {
   }
 }
 
+function SectionHeader({ label, color = 'text-primary' }: { label: string; color?: string }) {
+  return (
+    <div className="mt-3 mb-1 border-t border-border/20 pt-2">
+      <span className={`text-[9px] ${color} uppercase tracking-[0.15em] font-display`}>{label}</span>
+    </div>
+  );
+}
+
 function renderDetails(entity: SelectedEntity) {
   const d = entity.data;
   switch (entity.type) {
@@ -78,23 +94,60 @@ function renderDetails(entity: SelectedEntity) {
       const a = d as Aircraft;
       return (
         <>
-          <InfoRow label="Callsign" value={a.callsign || 'N/A'} />
+          {/* Badges */}
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {a.isMilitary && <Badge text="MIL" color="border-orange-500/50 text-orange-400 bg-orange-500/10" />}
+            {a.onGround && <Badge text="ON GROUND" color="border-muted-foreground/30 text-muted-foreground bg-muted/20" />}
+            {a.emergency && a.emergency !== 'none' && (
+              <Badge text={`EMERGENCY: ${a.emergency}`} color="border-destructive/50 text-destructive bg-destructive/10" />
+            )}
+            <Badge
+              text={a.positionSource || 'ADS-B'}
+              color="border-primary/30 text-primary bg-primary/5"
+            />
+          </div>
+
+          <SectionHeader label="Identity" />
+          <InfoRow label="Callsign" value={a.callsign || 'N/A'} highlight />
           <InfoRow label="ICAO24" value={a.icao24} />
+          <InfoRow label="Registration" value={a.registration} />
+          <InfoRow label="Airline / Operator" value={a.operator !== 'Unknown' ? a.operator : a.airline} />
+          <InfoRow label="Aircraft Type" value={a.aircraftType} />
+          <InfoRow label="Model" value={a.model} />
           <InfoRow label="Country" value={a.originCountry} />
-          <InfoRow label="Airline" value={a.airline || 'Unknown'} />
-          <InfoRow label="Type" value={a.aircraftType || 'Unknown'} />
-          <InfoRow label="Model" value={a.model || 'Unknown'} />
-          <InfoRow label="Registration" value={a.registration || 'Unknown'} />
-          <InfoRow label="Altitude" value={`${Math.round(a.altitude)} m`} />
-          <InfoRow label="Speed" value={`${Math.round(a.velocity)} m/s`} />
+
+          <SectionHeader label="Flight Data" />
+          <InfoRow label="Altitude (Baro)" value={a.baroAltitude != null ? `${Math.round(a.baroAltitude)} m` : 'Unknown'} />
+          <InfoRow label="Altitude (Geo)" value={a.geoAltitude != null ? `${Math.round(a.geoAltitude)} m` : 'Unknown'} />
+          <InfoRow label="Ground Speed" value={`${Math.round(a.velocity)} m/s (${Math.round(a.velocity * 1.944)} kts)`} />
+          <InfoRow label="Vertical Rate" value={a.verticalRate != null ? `${a.verticalRate > 0 ? '+' : ''}${Math.round(a.verticalRate)} m/s` : 'Unknown'} />
+          <InfoRow label="True Airspeed" value={a.trueAirspeed != null ? `${Math.round(a.trueAirspeed)} m/s` : 'Unknown'} />
+          <InfoRow label="Mach" value={a.mach != null ? a.mach.toFixed(3) : 'Unknown'} />
           <InfoRow label="Heading" value={`${Math.round(a.heading)}°`} />
-          {a.militaryClassification && (
-            <div className="mt-2 border-t border-border/20 pt-2">
-              <span className="text-[9px] text-orange-400 uppercase tracking-wider font-display">Military Intel</span>
-              <InfoRow label="Classification" value={a.militaryClassification.toUpperCase()} />
-            </div>
+          <InfoRow label="Squawk" value={a.squawk || 'Unknown'} />
+
+          <SectionHeader label="Position" />
+          <InfoRow label="Latitude" value={a.latitude.toFixed(5)} />
+          <InfoRow label="Longitude" value={a.longitude.toFixed(5)} />
+          <InfoRow label="On Ground" value={a.onGround ? 'Yes' : 'No'} />
+          <InfoRow label="Position Source" value={a.positionSource || 'Unknown'} />
+
+          {a.route && (
+            <>
+              <SectionHeader label="Route" />
+              <InfoRow label="Route" value={a.route} />
+            </>
           )}
-          <InfoRow label="Last Contact" value={new Date(a.lastContact * 1000).toUTCString()} />
+
+          {a.militaryClassification && (
+            <>
+              <SectionHeader label="Military Intelligence" color="text-orange-400" />
+              <InfoRow label="Classification" value={a.militaryClassification.toUpperCase()} highlight />
+            </>
+          )}
+
+          <SectionHeader label="Timing" />
+          <InfoRow label="Last Contact" value={a.lastContact ? new Date(a.lastContact * 1000).toUTCString() : 'Unknown'} />
         </>
       );
     }
@@ -102,35 +155,34 @@ function renderDetails(entity: SelectedEntity) {
       const s = d as SatelliteData;
       return (
         <>
-          <InfoRow label="Name" value={s.name} />
-          <InfoRow label="NORAD" value={s.noradId} />
+          <InfoRow label="Name" value={s.name} highlight />
+          <InfoRow label="NORAD ID" value={s.noradId} />
           <InfoRow label="Altitude" value={`${Math.round(s.altitude)} km`} />
-          <InfoRow label="Lat" value={s.latitude.toFixed(4)} />
-          <InfoRow label="Lon" value={s.longitude.toFixed(4)} />
+          <InfoRow label="Latitude" value={s.latitude.toFixed(4)} />
+          <InfoRow label="Longitude" value={s.longitude.toFixed(4)} />
+          <SectionHeader label="TLE Data" />
+          <div className="text-[8px] font-mono text-muted-foreground break-all leading-relaxed">
+            <div>{s.tle1}</div>
+            <div>{s.tle2}</div>
+          </div>
         </>
       );
     }
     case 'city': {
       const c = d as City;
       let localTime = '';
-      try {
-        localTime = new Date().toLocaleTimeString('en-US', { timeZone: c.timezone, hour12: false });
-      } catch { localTime = 'N/A'; }
+      try { localTime = new Date().toLocaleTimeString('en-US', { timeZone: c.timezone, hour12: false }); } catch { localTime = 'N/A'; }
       return (
         <>
           <InfoRow label="Country" value={c.country} />
-          <InfoRow label="Population" value={c.population.toLocaleString()} />
+          <InfoRow label="Population" value={c.population.toLocaleString()} highlight />
           <InfoRow label="Tier" value={`Tier ${c.tier}`} />
           <InfoRow label="Timezone" value={c.timezone} />
           <InfoRow label="Local Time" value={localTime} />
-          <div className="mt-2 border-t border-border/20 pt-2">
-            <span className="text-[9px] text-primary uppercase tracking-wider font-display">Intel Summary</span>
-            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{c.description}</p>
-          </div>
-          <div className="mt-2 border-t border-border/20 pt-2">
-            <span className="text-[9px] text-primary uppercase tracking-wider font-display">Weather</span>
-            <WeatherInfo lat={c.latitude} lon={c.longitude} />
-          </div>
+          <SectionHeader label="Intel Summary" />
+          <p className="text-muted-foreground text-[9px] leading-relaxed whitespace-pre-line">{c.description}</p>
+          <SectionHeader label="Weather" />
+          <WeatherInfo lat={c.latitude} lon={c.longitude} />
         </>
       );
     }
@@ -139,11 +191,9 @@ function renderDetails(entity: SelectedEntity) {
       return (
         <>
           <InfoRow label="Country" value={b.country} />
-          <InfoRow label="Branch" value={b.branch} />
-          <div className="mt-2 border-t border-border/20 pt-2">
-            <span className="text-[9px] text-neon-green uppercase tracking-wider font-display">Intel Briefing</span>
-            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{b.description}</p>
-          </div>
+          <InfoRow label="Branch" value={b.branch} highlight />
+          <SectionHeader label="Intel Briefing" color="text-accent" />
+          <p className="text-muted-foreground text-[9px] leading-relaxed whitespace-pre-line">{b.description}</p>
         </>
       );
     }
@@ -151,18 +201,21 @@ function renderDetails(entity: SelectedEntity) {
       const z = d as ConflictZone;
       return (
         <>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            <Badge text={z.severity} color={z.severity === 'high' ? 'border-destructive/50 text-destructive bg-destructive/10' : 'border-yellow-500/50 text-yellow-400 bg-yellow-500/10'} />
+            <Badge text={z.eventType} color="border-orange-500/30 text-orange-400 bg-orange-500/5" />
+          </div>
           <InfoRow label="Region" value={z.region} />
-          <InfoRow label="Severity" value={z.severity.toUpperCase()} />
-          <InfoRow label="Event Type" value={(z.eventType || 'combat').toUpperCase()} />
           <InfoRow label="Countries" value={z.countries.join(', ')} />
           {z.source && <InfoRow label="Source" value={z.source} />}
           {z.timestamp && <InfoRow label="Timestamp" value={new Date(z.timestamp).toUTCString()} />}
-          <p className="text-muted-foreground text-[9px] mt-2 leading-relaxed">{z.summary}</p>
+          <SectionHeader label="Situation Report" color="text-destructive" />
+          <p className="text-muted-foreground text-[9px] leading-relaxed">{z.summary}</p>
           {z.recentDevelopments && (
-            <div className="mt-2 border-t border-border/20 pt-2">
-              <span className="text-[9px] text-destructive uppercase tracking-wider font-display">Recent Intel</span>
-              <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed">{z.recentDevelopments}</p>
-            </div>
+            <>
+              <SectionHeader label="Recent Intel" color="text-destructive" />
+              <p className="text-muted-foreground text-[9px] leading-relaxed">{z.recentDevelopments}</p>
+            </>
           )}
         </>
       );
@@ -172,7 +225,7 @@ function renderDetails(entity: SelectedEntity) {
       return (
         <>
           <InfoRow label="MMSI" value={sh.mmsi} />
-          <InfoRow label="Type" value={sh.type.toUpperCase()} />
+          <InfoRow label="Type" value={sh.type.toUpperCase()} highlight />
           <InfoRow label="Speed" value={`${sh.speed} kn`} />
           <InfoRow label="Course" value={`${sh.course}°`} />
           <InfoRow label="Last Update" value={new Date(sh.lastUpdate).toUTCString()} />
@@ -183,13 +236,11 @@ function renderDetails(entity: SelectedEntity) {
       const inf = d as InfrastructureItem;
       return (
         <>
-          <InfoRow label="Type" value={inf.type.replace(/_/g, ' ').toUpperCase()} />
+          <InfoRow label="Type" value={inf.type.replace(/_/g, ' ').toUpperCase()} highlight />
           <InfoRow label="Category" value={inf.category.toUpperCase()} />
           <InfoRow label="Country" value={inf.country} />
-          <div className="mt-2 border-t border-border/20 pt-2">
-            <span className="text-[9px] text-primary uppercase tracking-wider font-display">Intel Dossier</span>
-            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{inf.description}</p>
-          </div>
+          <SectionHeader label="Intel Dossier" />
+          <p className="text-muted-foreground text-[9px] leading-relaxed whitespace-pre-line">{inf.description}</p>
         </>
       );
     }
@@ -197,16 +248,14 @@ function renderDetails(entity: SelectedEntity) {
       const g = d as GPSInterferenceZone;
       return (
         <>
+          <Badge text={`${(g.interferenceScore * 100).toFixed(0)}% interference`} color="border-orange-500/50 text-orange-400 bg-orange-500/10" />
           <InfoRow label="Region" value={g.region} />
-          <InfoRow label="Severity" value={g.severity.toUpperCase()} />
+          <InfoRow label="Severity" value={g.severity.toUpperCase()} highlight />
           <InfoRow label="Type" value={g.type.toUpperCase()} />
-          <InfoRow label="Score" value={`${(g.interferenceScore * 100).toFixed(0)}%`} />
           <InfoRow label="Source" value={g.source} />
           <InfoRow label="Last Updated" value={g.lastUpdated} />
-          <div className="mt-2 border-t border-border/20 pt-2">
-            <span className="text-[9px] text-orange-400 uppercase tracking-wider font-display">SIGINT Analysis</span>
-            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{g.description}</p>
-          </div>
+          <SectionHeader label="SIGINT Analysis" color="text-orange-400" />
+          <p className="text-muted-foreground text-[9px] leading-relaxed whitespace-pre-line">{g.description}</p>
         </>
       );
     }
@@ -214,67 +263,56 @@ function renderDetails(entity: SelectedEntity) {
       const ib = d as InternetBlackout;
       return (
         <>
+          <Badge text={ib.severity} color="border-destructive/50 text-destructive bg-destructive/10" />
           <InfoRow label="Country" value={ib.country} />
           <InfoRow label="Region" value={ib.region} />
-          <InfoRow label="Connectivity Drop" value={`${ib.connectivityDrop}%`} />
-          <InfoRow label="Severity" value={ib.severity.toUpperCase()} />
+          <InfoRow label="Connectivity Drop" value={`${ib.connectivityDrop}%`} highlight />
           <InfoRow label="Source" value={ib.source} />
           <InfoRow label="Duration" value={ib.duration} />
           <InfoRow label="Last Updated" value={ib.lastUpdated} />
-          <div className="mt-2 border-t border-border/20 pt-2">
-            <span className="text-[9px] text-red-400 uppercase tracking-wider font-display">Cyber Intel</span>
-            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{ib.description}</p>
-          </div>
+          <SectionHeader label="Cyber Intel" color="text-destructive" />
+          <p className="text-muted-foreground text-[9px] leading-relaxed whitespace-pre-line">{ib.description}</p>
         </>
       );
     }
     case 'airspace_closure': {
       const ac = d as AirspaceClosure;
-      const statusColor = ac.status === 'active' ? 'text-red-400' : ac.status === 'inactive' ? 'text-green-400' : 'text-yellow-400';
       return (
         <>
-          <InfoRow label="Airspace ID" value={ac.name} />
+          <Badge
+            text={ac.status}
+            color={ac.status === 'active' ? 'border-destructive/50 text-destructive bg-destructive/10' : ac.status === 'inactive' ? 'border-accent/50 text-accent bg-accent/10' : 'border-yellow-500/50 text-yellow-400 bg-yellow-500/10'}
+          />
           <InfoRow label="Type" value={ac.type.toUpperCase()} />
           <InfoRow label="Lower Limit" value={ac.lowerLimit} />
           <InfoRow label="Upper Limit" value={ac.upperLimit} />
-          <div className="flex justify-between items-center py-1 border-b border-border/20">
-            <span className="text-muted-foreground text-[9px] uppercase tracking-wider">Status</span>
-            <span className={`text-[10px] font-mono font-bold ${statusColor}`}>{ac.status.toUpperCase()}</span>
-          </div>
           {ac.validFrom && <InfoRow label="Valid From" value={new Date(ac.validFrom).toUTCString()} />}
           {ac.validTo && <InfoRow label="Valid To" value={new Date(ac.validTo).toUTCString()} />}
           <InfoRow label="Source" value={ac.source} />
-          <div className="mt-2 border-t border-border/20 pt-2">
-            <span className="text-[9px] text-rose-400 uppercase tracking-wider font-display">Airspace Intel</span>
-            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{ac.description}</p>
-          </div>
+          <SectionHeader label="Airspace Intel" color="text-rose-400" />
+          <p className="text-muted-foreground text-[9px] leading-relaxed whitespace-pre-line">{ac.description}</p>
         </>
       );
     }
     case 'live_camera': {
       const cam = d as LiveCamera;
-      const statusColor = cam.status === 'online' ? 'text-green-400' : 'text-red-400';
       return (
         <>
+          <Badge
+            text={cam.status === 'online' ? '● ONLINE' : '○ OFFLINE'}
+            color={cam.status === 'online' ? 'border-accent/50 text-accent bg-accent/10' : 'border-destructive/50 text-destructive bg-destructive/10'}
+          />
           <InfoRow label="Type" value={cam.type.toUpperCase()} />
           <InfoRow label="Location" value={`${cam.city}, ${cam.country}`} />
           <InfoRow label="Provider" value={cam.provider} />
-          <div className="flex justify-between items-center py-1 border-b border-border/20">
-            <span className="text-muted-foreground text-[9px] uppercase tracking-wider">Status</span>
-            <span className={`text-[10px] font-mono font-bold ${statusColor}`}>
-              {cam.status === 'online' ? '● ONLINE' : '○ OFFLINE'}
-            </span>
-          </div>
-          <div className="mt-2 border-t border-border/20 pt-2">
-            <span className="text-[9px] text-emerald-400 uppercase tracking-wider font-display">Camera Intel</span>
-            <p className="text-muted-foreground text-[9px] mt-1 leading-relaxed whitespace-pre-line">{cam.description}</p>
-          </div>
+          <SectionHeader label="Camera Intel" color="text-emerald-400" />
+          <p className="text-muted-foreground text-[9px] leading-relaxed whitespace-pre-line">{cam.description}</p>
           {cam.status === 'online' && (
             <a
               href={cam.streamUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-3 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-display uppercase tracking-wider hover:bg-emerald-500/30 transition-colors"
+              className="mt-3 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-display uppercase tracking-wider hover:bg-accent/20 transition-colors"
             >
               <ExternalLink className="w-3 h-3" />
               Open Live Feed
@@ -287,27 +325,24 @@ function renderDetails(entity: SelectedEntity) {
 }
 
 export function DetailPanel({ entity, onClose }: DetailPanelProps) {
-  const severityColor = entity.type === 'conflict'
-    ? (entity.data as ConflictZone).severity === 'high' ? 'text-destructive' : 'text-neon-amber'
-    : entity.type === 'aircraft' && (entity.data as Aircraft).militaryClassification
-      ? 'text-orange-400'
-      : entity.type === 'gps_interference'
-        ? 'text-orange-400'
-        : entity.type === 'internet_blackout'
-          ? 'text-red-400'
-          : entity.type === 'airspace_closure'
-            ? 'text-rose-400'
-            : entity.type === 'live_camera'
-              ? 'text-emerald-400'
-              : 'text-primary';
+  const severityColor =
+    entity.type === 'conflict' ? ((entity.data as ConflictZone).severity === 'high' ? 'text-destructive' : 'text-yellow-400')
+    : entity.type === 'aircraft' && (entity.data as Aircraft).isMilitary ? 'text-orange-400'
+    : entity.type === 'gps_interference' ? 'text-orange-400'
+    : entity.type === 'internet_blackout' ? 'text-destructive'
+    : entity.type === 'airspace_closure' ? 'text-rose-400'
+    : entity.type === 'live_camera' ? 'text-accent'
+    : 'text-primary';
 
   return (
     <div className="space-y-0.5">
-      <div className="flex items-center gap-2 mb-3">
-        <span className={severityColor}>{getIcon(entity.type)}</span>
-        <div>
-          <div className="text-[8px] uppercase tracking-wider text-muted-foreground">{entity.type.replace(/_/g, ' ')}</div>
-          <div className="text-xs font-display font-semibold text-foreground">{getTitle(entity)}</div>
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className={`p-1.5 rounded-lg bg-secondary/50 ${severityColor}`}>
+          {getIcon(entity.type)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[8px] uppercase tracking-[0.15em] text-muted-foreground font-display">{entity.type.replace(/_/g, ' ')}</div>
+          <div className="text-xs font-display font-semibold text-foreground truncate">{getTitle(entity)}</div>
         </div>
       </div>
       {renderDetails(entity)}
