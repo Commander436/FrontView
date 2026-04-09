@@ -79,9 +79,9 @@ function getTitle(entity: SelectedEntity): string {
   }
 }
 
-function SectionHeader({ label, color = 'text-primary' }: { label: string; color?: string }) {
+function SectionHeader({ label, color = 'text-foreground/70' }: { label: string; color?: string }) {
   return (
-    <div className="mt-3 mb-1 border-t border-border/20 pt-2">
+    <div className="mt-3 mb-1 border-t border-foreground/10 pt-2">
       <span className={`text-[9px] ${color} uppercase tracking-[0.15em] font-display`}>{label}</span>
     </div>
   );
@@ -103,7 +103,7 @@ function renderDetails(entity: SelectedEntity) {
             )}
             <Badge
               text={a.positionSource || 'ADS-B'}
-              color="border-primary/30 text-primary bg-primary/5"
+              color="border-foreground/20 text-foreground/70 bg-foreground/5"
             />
           </div>
 
@@ -331,8 +331,8 @@ export function DetailPanel({ entity, onClose }: DetailPanelProps) {
     : entity.type === 'gps_interference' ? 'text-orange-400'
     : entity.type === 'internet_blackout' ? 'text-destructive'
     : entity.type === 'airspace_closure' ? 'text-rose-400'
-    : entity.type === 'live_camera' ? 'text-accent'
-    : 'text-primary';
+    : entity.type === 'live_camera' ? 'text-green-400'
+    : 'text-foreground';
 
   return (
     <div className="space-y-0.5">

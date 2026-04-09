@@ -1,53 +1,7 @@
 import { ConflictZone } from "@/types/globe";
 
-// Real-world conflict events as precise points — no synthetic circles
-// Sources: GDACS, ACLED, LiveUAmap, NASA FIRMS, Global Incident Map
-export const CONFLICT_ZONES: ConflictZone[] = [
-  // === UKRAINE ===
-  { name: 'Bakhmut Frontline', region: 'Eastern Europe', countries: ['Ukraine', 'Russia'], latitude: 48.5953, longitude: 37.9991, radius: 0, severity: 'high', eventType: 'combat', summary: 'Intense urban combat zone in Donetsk Oblast. Heavy artillery exchanges, drone warfare, and entrenched positions along the Bakhmut-Chasiv Yar axis.', recentDevelopments: 'Ukrainian forces maintain defensive positions west of Bakhmut. Russian forces attempting flanking advances.', timestamp: '2025-03-06T14:30:00Z', source: 'ACLED / LiveUAmap' },
-  { name: 'Avdiivka Sector', region: 'Eastern Europe', countries: ['Ukraine', 'Russia'], latitude: 48.1397, longitude: 37.7482, radius: 0, severity: 'high', eventType: 'combat', summary: 'Major combat sector south of Donetsk city. Russian forces captured Avdiivka in Feb 2024; frontline shifted westward.', recentDevelopments: 'Russian forces pushing toward Pokrovsk logistics hub.', timestamp: '2025-03-06T12:00:00Z', source: 'ACLED' },
-  { name: 'Zaporizhzhia Front', region: 'Eastern Europe', countries: ['Ukraine', 'Russia'], latitude: 47.25, longitude: 36.10, radius: 0, severity: 'high', eventType: 'combat', summary: 'Southern front spanning from Zaporizhzhia to Melitopol. Drone strikes on logistics nodes.', timestamp: '2025-03-06T10:00:00Z', source: 'LiveUAmap' },
-  { name: 'Kherson Dnipro Crossings', region: 'Eastern Europe', countries: ['Ukraine', 'Russia'], latitude: 46.6354, longitude: 32.6169, radius: 0, severity: 'medium', eventType: 'strike', summary: 'Cross-river operations across the Dnipro. Ukrainian forces hold bridgeheads on the east bank.', timestamp: '2025-03-05T22:00:00Z', source: 'LiveUAmap' },
-  { name: 'Kursk Border Incursion', region: 'Russia-Ukraine Border', countries: ['Ukraine', 'Russia'], latitude: 51.73, longitude: 36.19, radius: 0, severity: 'high', eventType: 'combat', summary: 'Ukrainian cross-border operation into Kursk Oblast. Major escalation event.', timestamp: '2025-03-06T10:00:00Z', source: 'LiveUAmap' },
-  { name: 'Donetsk Industrial Fire', region: 'Eastern Europe', countries: ['Ukraine'], latitude: 48.0159, longitude: 37.8028, radius: 0, severity: 'medium', eventType: 'thermal', summary: 'Large thermal anomaly detected via NASA FIRMS consistent with industrial facility fire from artillery strike.', timestamp: '2025-03-06T16:00:00Z', source: 'NASA FIRMS' },
-  { name: 'Luhansk Thermal Anomaly', region: 'Eastern Europe', countries: ['Ukraine', 'Russia'], latitude: 48.57, longitude: 39.31, radius: 0, severity: 'medium', eventType: 'thermal', summary: 'Large-scale fire detected in industrial zone. Possible ammunition depot strike.', timestamp: '2025-03-06T07:00:00Z', source: 'NASA FIRMS' },
-
-  // === IRAN ===
-  { name: 'Isfahan Strike Aftermath', region: 'Central Iran', countries: ['Iran'], latitude: 32.65, longitude: 51.68, radius: 0, severity: 'high', eventType: 'strike', summary: 'Reports of military facility strikes near Isfahan nuclear site.', timestamp: '2025-03-04T02:00:00Z', source: 'GDACS / FIRMS' },
-  { name: 'Tehran Protests', region: 'Tehran', countries: ['Iran'], latitude: 35.69, longitude: 51.39, radius: 0, severity: 'medium', eventType: 'humanitarian', summary: 'Anti-government protests with security forces deployed across Tehran.', timestamp: '2025-03-05T14:00:00Z', source: 'Global Incident Map' },
-  { name: 'Sistan-Baluchestan Clashes', region: 'SE Iran', countries: ['Iran'], latitude: 27.20, longitude: 60.68, radius: 0, severity: 'medium', eventType: 'combat', summary: 'Clashes between IRGC and Jaish ul-Adl militants near Pakistan border.', timestamp: '2025-03-05T06:00:00Z', source: 'LiveUAmap' },
-  { name: 'Strait of Hormuz Tensions', region: 'Persian Gulf', countries: ['Iran', 'USA'], latitude: 26.56, longitude: 56.25, radius: 0, severity: 'high', eventType: 'standoff', summary: 'Naval standoff with IRGC fast boats harassing commercial shipping.', timestamp: '2025-03-06T12:00:00Z', source: 'LiveUAmap' },
-  { name: 'Bandar Abbas Naval Activity', region: 'Southern Iran', countries: ['Iran'], latitude: 27.18, longitude: 56.27, radius: 0, severity: 'medium', eventType: 'standoff', summary: 'Elevated IRGCN activity and submarine deployments from Bandar Abbas.', timestamp: '2025-03-06T08:00:00Z', source: 'FIRMS' },
-
-  // === GAZA / ISRAEL / LEBANON ===
-  { name: 'Northern Gaza Operations', region: 'Middle East', countries: ['Israel', 'Palestine'], latitude: 31.52, longitude: 34.47, radius: 0, severity: 'high', eventType: 'combat', summary: 'Intense urban combat in northern Gaza. Infrastructure severely damaged.', timestamp: '2025-03-06T14:00:00Z', source: 'GDACS' },
-  { name: 'Khan Younis', region: 'Middle East', countries: ['Israel', 'Palestine'], latitude: 31.35, longitude: 34.30, radius: 0, severity: 'high', eventType: 'strike', summary: 'Airstrikes and ground operations in Khan Younis area.', timestamp: '2025-03-06T11:00:00Z', source: 'LiveUAmap' },
-  { name: 'Rafah Border Zone', region: 'Gaza-Egypt Border', countries: ['Israel', 'Palestine', 'Egypt'], latitude: 31.2773, longitude: 34.2416, radius: 0, severity: 'high', eventType: 'humanitarian', summary: 'Critical humanitarian corridor at the Egypt-Gaza border. Over 1.5M displaced civilians.', timestamp: '2025-03-06T06:00:00Z', source: 'GDACS' },
-  { name: 'South Lebanon Border', region: 'Lebanon-Israel Border', countries: ['Israel', 'Lebanon'], latitude: 33.10, longitude: 35.31, radius: 0, severity: 'high', eventType: 'strike', summary: 'Daily cross-border exchanges between IDF and Hezbollah.', timestamp: '2025-03-06T13:00:00Z', source: 'LiveUAmap' },
-  { name: 'Syrian-Israeli Golan Front', region: 'Golan Heights', countries: ['Israel', 'Syria'], latitude: 33.10, longitude: 35.85, radius: 0, severity: 'medium', eventType: 'standoff', summary: 'Israeli operations in Syrian buffer zone. Post-Assad power vacuum.', timestamp: '2025-03-05T20:00:00Z', source: 'LiveUAmap' },
-
-  // === YEMEN / RED SEA ===
-  { name: 'Houthi Red Sea Attacks', region: 'Red Sea', countries: ['Yemen', 'USA', 'UK'], latitude: 14.50, longitude: 42.50, radius: 0, severity: 'high', eventType: 'strike', summary: 'Houthi anti-ship missile and drone attacks on commercial vessels. Global shipping rerouting.', timestamp: '2025-03-06T00:00:00Z', source: 'GDACS / LiveUAmap' },
-
-  // === SYRIA ===
-  { name: 'Northern Syria – Turkish Operations', region: 'Middle East', countries: ['Syria', 'Turkey'], latitude: 36.50, longitude: 39.00, radius: 0, severity: 'medium', eventType: 'strike', summary: 'Turkish military operations against Kurdish forces in northern Syria.', timestamp: '2025-03-04T10:00:00Z', source: 'LiveUAmap' },
-  { name: 'Deir ez-Zor Thermal Event', region: 'Eastern Syria', countries: ['Syria'], latitude: 35.33, longitude: 40.14, radius: 0, severity: 'medium', eventType: 'thermal', summary: 'Thermal anomaly detected. Likely coalition airstrike on ISIL position.', timestamp: '2025-03-06T01:00:00Z', source: 'NASA FIRMS' },
-
-  // === AFRICA ===
-  { name: 'Khartoum RSF-SAF Battle', region: 'East Africa', countries: ['Sudan'], latitude: 15.50, longitude: 32.56, radius: 0, severity: 'high', eventType: 'combat', summary: 'Urban warfare between RSF and SAF in Khartoum. Mass civilian displacement.', timestamp: '2025-03-06T05:00:00Z', source: 'GDACS / ACLED' },
-  { name: 'Darfur – El Fasher Siege', region: 'East Africa', countries: ['Sudan'], latitude: 13.63, longitude: 25.35, radius: 0, severity: 'high', eventType: 'humanitarian', summary: 'RSF besieging El Fasher, last SAF-held major city in Darfur. Catastrophic humanitarian situation.', timestamp: '2025-03-05T20:00:00Z', source: 'GDACS' },
-  { name: 'Goma – M23 Occupation', region: 'Central Africa', countries: ['DR Congo', 'Rwanda'], latitude: -1.6585, longitude: 29.2208, radius: 0, severity: 'high', eventType: 'combat', summary: 'M23 rebels captured Goma. Rwandan involvement confirmed by UN.', timestamp: '2025-03-06T04:00:00Z', source: 'GDACS / ACLED' },
-  { name: 'Cabo Delgado Insurgency', region: 'Northern Mozambique', countries: ['Mozambique'], latitude: -12.35, longitude: 40.35, radius: 0, severity: 'medium', eventType: 'combat', summary: 'ISIL-aligned insurgents conducting raids in gas-rich Cabo Delgado.', timestamp: '2025-03-04T10:00:00Z', source: 'Global Incident Map' },
-  { name: 'Sahel Multi-State Conflict', region: 'West Africa', countries: ['Mali', 'Burkina Faso', 'Niger'], latitude: 14.60, longitude: -1.50, radius: 0, severity: 'high', eventType: 'combat', summary: 'JNIM and ISGS conducting operations. Military juntas responding with operations.', timestamp: '2025-03-05T08:00:00Z', source: 'ACLED' },
-  { name: 'Ethiopian Amhara Conflict', region: 'East Africa', countries: ['Ethiopia'], latitude: 11.50, longitude: 39.50, radius: 0, severity: 'medium', eventType: 'combat', summary: 'Fano militia clashing with Ethiopian federal forces in Amhara region.', timestamp: '2025-03-05T16:00:00Z', source: 'ACLED' },
-  { name: 'Mogadishu – Al-Shabaab', region: 'East Africa', countries: ['Somalia'], latitude: 2.05, longitude: 45.32, radius: 0, severity: 'medium', eventType: 'combat', summary: 'Al-Shabaab continues asymmetric attacks in Mogadishu despite AU operations.', timestamp: '2025-03-04T12:00:00Z', source: 'ACLED' },
-
-  // === ASIA ===
-  { name: 'Myanmar Resistance Offensive', region: 'Southeast Asia', countries: ['Myanmar'], latitude: 22.00, longitude: 95.50, radius: 0, severity: 'high', eventType: 'combat', summary: 'Resistance forces advancing in Sagaing and Shan states against junta.', timestamp: '2025-03-06T02:00:00Z', source: 'ACLED / LiveUAmap' },
-  { name: 'Taiwan Strait Tensions', region: 'East Asia', countries: ['China', 'Taiwan', 'USA'], latitude: 24.50, longitude: 119.00, radius: 0, severity: 'medium', eventType: 'standoff', summary: 'PLA naval exercises and ADIZ incursions. US carrier group present.', timestamp: '2025-03-05T22:00:00Z', source: 'LiveUAmap' },
-  { name: 'Second Thomas Shoal Standoff', region: 'South China Sea', countries: ['China', 'Philippines'], latitude: 9.75, longitude: 115.87, radius: 0, severity: 'low', eventType: 'standoff', summary: 'Philippine Navy resupply missions confronted by Chinese Coast Guard.', timestamp: '2025-03-02T06:00:00Z', source: 'GDACS' },
-  { name: 'Kashmir LoC', region: 'South Asia', countries: ['India', 'Pakistan'], latitude: 34.10, longitude: 74.80, radius: 0, severity: 'medium', eventType: 'standoff', summary: 'Periodic skirmishes and infiltration attempts along Line of Control.', timestamp: '2025-03-04T18:00:00Z', source: 'Global Incident Map' },
-
-  // === AMERICAS ===
-  { name: 'Port-au-Prince Gang Control', region: 'Caribbean', countries: ['Haiti'], latitude: 18.54, longitude: -72.34, radius: 0, severity: 'medium', eventType: 'combat', summary: 'Armed gang coalitions control over 80% of Port-au-Prince. Complete collapse of state authority.', timestamp: '2025-03-05T14:00:00Z', source: 'ACLED' },
-];
+// LIVE DATA ONLY — no static presets
+// This array is intentionally empty.
+// Conflict data must be populated from live OSINT feeds (GDACS, NASA FIRMS, etc.)
+// If live feeds are unavailable, the UI shows "Conflict data unavailable."
+export const CONFLICT_ZONES: ConflictZone[] = [];
