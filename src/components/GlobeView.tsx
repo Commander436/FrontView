@@ -468,7 +468,7 @@ export function GlobeView({ layers, aircraft, satellites, osintEvents, density, 
     });
   }, [layers.bases, density]);
 
-  // ========== CONFLICT ZONES ==========
+  // ========== CONFLICT ZONES (LIVE OSINT — no static data) ==========
   useEffect(() => {
     const ds = dsRefs.current['conflicts'];
     if (!ds) return;
@@ -481,7 +481,12 @@ export function GlobeView({ layers, aircraft, satellites, osintEvents, density, 
       standoff: '#ffcc00', thermal: '#ff4400',
     };
 
-    CONFLICT_ZONES.forEach(z => {
+    if (osintEvents.length === 0) {
+      console.log('[OSINT] No live events to render');
+      return;
+    }
+
+    osintEvents.forEach(z => {
       if (!passDensity(z.name, density)) return;
       const evtColor = EVENT_COLORS[z.eventType || 'combat'] || '#ff3333';
       const glowAlpha = z.severity === 'high' ? 0.7 : z.severity === 'medium' ? 0.5 : 0.3;
@@ -511,7 +516,7 @@ export function GlobeView({ layers, aircraft, satellites, osintEvents, density, 
         properties: { entityType: 'conflict', entityData: JSON.stringify(z) },
       });
     });
-  }, [layers.conflicts, density]);
+  }, [layers.conflicts, osintEvents, density]);
 
   // ========== CITIES ==========
   useEffect(() => {
