@@ -1,8 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { LayerVisibility, Aircraft, SatelliteData, DensityMode, DisplayMode } from '@/types/globe';
+import { LayerVisibility, Aircraft, SatelliteData, DensityMode, DisplayMode, ConflictZone } from '@/types/globe';
 import { CITIES } from '@/data/cities';
 import { MILITARY_BASES } from '@/data/militaryBases';
-import { CONFLICT_ZONES } from '@/data/conflictZones';
 import { SAMPLE_SHIPS } from '@/data/ships';
 import { INFRASTRUCTURE } from '@/data/infrastructure';
 import { GPS_INTERFERENCE_ZONES } from '@/data/gpsInterference';
@@ -104,12 +103,13 @@ interface GlobeViewProps {
   layers: LayerVisibility;
   aircraft: Aircraft[];
   satellites: SatelliteData[];
+  osintEvents: ConflictZone[];
   density: DensityMode;
   displayMode: DisplayMode;
   onEntitySelect: (entity: any) => void;
 }
 
-export function GlobeView({ layers, aircraft, satellites, density, displayMode, onEntitySelect }: GlobeViewProps) {
+export function GlobeView({ layers, aircraft, satellites, osintEvents, density, displayMode, onEntitySelect }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
