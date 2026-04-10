@@ -119,6 +119,7 @@ const Index = () => {
             layers={layers}
             aircraft={aircraft}
             satellites={satellites}
+            osintEvents={osintEvents}
             density={density}
             displayMode={displayMode}
             onEntitySelect={selectEntity}
