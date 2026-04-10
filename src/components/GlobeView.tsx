@@ -114,6 +114,7 @@ export function GlobeView({ layers, aircraft, satellites, osintEvents, density, 
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
   const weatherLayerRef = useRef<any>(null);
+  const cloudLayerRef = useRef<any>(null);
 
   // Persistent entity maps — NEVER cleared during updates
   const aircraftEntities = useRef<Map<string, any>>(new Map());
