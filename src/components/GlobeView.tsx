@@ -1,8 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { LayerVisibility, Aircraft, SatelliteData, DensityMode, DisplayMode } from '@/types/globe';
+import { LayerVisibility, Aircraft, SatelliteData, DensityMode, DisplayMode, ConflictZone } from '@/types/globe';
 import { CITIES } from '@/data/cities';
 import { MILITARY_BASES } from '@/data/militaryBases';
-import { CONFLICT_ZONES } from '@/data/conflictZones';
 import { SAMPLE_SHIPS } from '@/data/ships';
 import { INFRASTRUCTURE } from '@/data/infrastructure';
 import { GPS_INTERFERENCE_ZONES } from '@/data/gpsInterference';
@@ -104,16 +103,18 @@ interface GlobeViewProps {
   layers: LayerVisibility;
   aircraft: Aircraft[];
   satellites: SatelliteData[];
+  osintEvents: ConflictZone[];
   density: DensityMode;
   displayMode: DisplayMode;
   onEntitySelect: (entity: any) => void;
 }
 
-export function GlobeView({ layers, aircraft, satellites, density, displayMode, onEntitySelect }: GlobeViewProps) {
+export function GlobeView({ layers, aircraft, satellites, osintEvents, density, displayMode, onEntitySelect }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
   const weatherLayerRef = useRef<any>(null);
+  const cloudLayerRef = useRef<any>(null);
 
   // Persistent entity maps — NEVER cleared during updates
   const aircraftEntities = useRef<Map<string, any>>(new Map());
@@ -468,7 +469,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
     });
   }, [layers.bases, density]);
 
-  // ========== CONFLICT ZONES ==========
+  // ========== CONFLICT ZONES (LIVE OSINT — no static data) ==========
   useEffect(() => {
     const ds = dsRefs.current['conflicts'];
     if (!ds) return;
@@ -481,7 +482,12 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
       standoff: '#ffcc00', thermal: '#ff4400',
     };
 
-    CONFLICT_ZONES.forEach(z => {
+    if (osintEvents.length === 0) {
+      console.log('[OSINT] No live events to render');
+      return;
+    }
+
+    osintEvents.forEach(z => {
       if (!passDensity(z.name, density)) return;
       const evtColor = EVENT_COLORS[z.eventType || 'combat'] || '#ff3333';
       const glowAlpha = z.severity === 'high' ? 0.7 : z.severity === 'medium' ? 0.5 : 0.3;
@@ -511,7 +517,7 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
         properties: { entityType: 'conflict', entityData: JSON.stringify(z) },
       });
     });
-  }, [layers.conflicts, density]);
+  }, [layers.conflicts, osintEvents, density]);
 
   // ========== CITIES ==========
   useEffect(() => {
@@ -864,6 +870,56 @@ export function GlobeView({ layers, aircraft, satellites, density, displayMode, 
       }
     };
   }, [layers.weatherRadar]);
+
+  // ========== GLOBAL CLOUD LAYER (NASA GIBS) ==========
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (!layers.clouds) {
+      if (cloudLayerRef.current) {
+        viewer.imageryLayers.remove(cloudLayerRef.current);
+        cloudLayerRef.current = null;
+      }
+      return;
+    }
+
+    // NASA GIBS MODIS Terra Cloud imagery — free, no key
+    const today = new Date().toISOString().slice(0, 10);
+    const provider = new Cesium.UrlTemplateImageryProvider({
+      url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${today}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+      maximumLevel: 9,
+      credit: 'NASA GIBS',
+    });
+    const layer = viewer.imageryLayers.addImageryProvider(provider);
+    layer.alpha = 0.35;
+    layer.brightness = 1.1;
+    cloudLayerRef.current = layer;
+
+    // Refresh every 20 minutes
+    const interval = setInterval(() => {
+      if (cloudLayerRef.current && viewer && !viewer.isDestroyed()) {
+        viewer.imageryLayers.remove(cloudLayerRef.current);
+        const newDate = new Date().toISOString().slice(0, 10);
+        const newProvider = new Cesium.UrlTemplateImageryProvider({
+          url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${newDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+          maximumLevel: 9,
+          credit: 'NASA GIBS',
+        });
+        const newLayer = viewer.imageryLayers.addImageryProvider(newProvider);
+        newLayer.alpha = 0.35;
+        newLayer.brightness = 1.1;
+        cloudLayerRef.current = newLayer;
+      }
+    }, 20 * 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      if (cloudLayerRef.current && viewer && !viewer.isDestroyed()) {
+        viewer.imageryLayers.remove(cloudLayerRef.current);
+        cloudLayerRef.current = null;
+      }
+    };
+  }, [layers.clouds]);
 
   // ========== 3D BUILDINGS ==========
   useEffect(() => {
