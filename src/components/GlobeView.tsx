@@ -871,6 +871,56 @@ export function GlobeView({ layers, aircraft, satellites, osintEvents, density, 
     };
   }, [layers.weatherRadar]);
 
+  // ========== GLOBAL CLOUD LAYER (NASA GIBS) ==========
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (!layers.clouds) {
+      if (cloudLayerRef.current) {
+        viewer.imageryLayers.remove(cloudLayerRef.current);
+        cloudLayerRef.current = null;
+      }
+      return;
+    }
+
+    // NASA GIBS MODIS Terra Cloud imagery — free, no key
+    const today = new Date().toISOString().slice(0, 10);
+    const provider = new Cesium.UrlTemplateImageryProvider({
+      url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${today}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+      maximumLevel: 9,
+      credit: 'NASA GIBS',
+    });
+    const layer = viewer.imageryLayers.addImageryProvider(provider);
+    layer.alpha = 0.35;
+    layer.brightness = 1.1;
+    cloudLayerRef.current = layer;
+
+    // Refresh every 20 minutes
+    const interval = setInterval(() => {
+      if (cloudLayerRef.current && viewer && !viewer.isDestroyed()) {
+        viewer.imageryLayers.remove(cloudLayerRef.current);
+        const newDate = new Date().toISOString().slice(0, 10);
+        const newProvider = new Cesium.UrlTemplateImageryProvider({
+          url: `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${newDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+          maximumLevel: 9,
+          credit: 'NASA GIBS',
+        });
+        const newLayer = viewer.imageryLayers.addImageryProvider(newProvider);
+        newLayer.alpha = 0.35;
+        newLayer.brightness = 1.1;
+        cloudLayerRef.current = newLayer;
+      }
+    }, 20 * 60 * 1000);
+
+    return () => {
+      clearInterval(interval);
+      if (cloudLayerRef.current && viewer && !viewer.isDestroyed()) {
+        viewer.imageryLayers.remove(cloudLayerRef.current);
+        cloudLayerRef.current = null;
+      }
+    };
+  }, [layers.clouds]);
+
   // ========== 3D BUILDINGS ==========
   useEffect(() => {
     const viewer = viewerRef.current;
