@@ -183,6 +183,5 @@ export interface LayerVisibility {
   internetBlackouts: boolean;
   airspaceClosures: boolean;
   liveCameras: boolean;
-  clouds: boolean;
   scopeOverlay: boolean;
 }

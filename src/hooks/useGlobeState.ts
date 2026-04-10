@@ -21,7 +21,6 @@ export function useGlobeState() {
     internetBlackouts: false,
     airspaceClosures: false,
     liveCameras: false,
-    clouds: false,
     scopeOverlay: false,
   });
 

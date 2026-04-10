@@ -45,9 +45,8 @@ const INFRA_TOGGLES: ToggleItem[] = [
   { key: 'bases', label: 'MILITARY BASES', icon: Shield },
 ];
 
-const ENVIRONMENT_TOGGLES: ToggleItem[] = [
+const EXTRAS_TOGGLES: ToggleItem[] = [
   { key: 'buildings', label: '3D BUILDINGS', icon: Building },
-  { key: 'clouds', label: 'GLOBAL CLOUDS', icon: CloudRain },
 ];
 
 const DATA_LAYER_TOGGLES: ToggleItem[] = [
@@ -205,7 +204,7 @@ export function LeftPanel({
           {/* Categories */}
           <Category title="Aviation & Maritime" icon={Navigation} items={TRANSPORT_TOGGLES} layers={layers} onToggle={onToggleLayer} getCount={getCount} defaultOpen />
           <Category title="Infrastructure" icon={Factory} items={INFRA_TOGGLES} layers={layers} onToggle={onToggleLayer} />
-          <Category title="Environment" icon={Box} items={ENVIRONMENT_TOGGLES} layers={layers} onToggle={onToggleLayer} />
+          <Category title="Extras" icon={Box} items={EXTRAS_TOGGLES} layers={layers} onToggle={onToggleLayer} />
           <Category title="Threat Intelligence" icon={BarChart3} items={DATA_LAYER_TOGGLES} layers={layers} onToggle={onToggleLayer} />
 
           {/* System Status */}
