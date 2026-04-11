@@ -65,18 +65,52 @@ const Index = () => {
     if (!searchQuery.trim()) return;
     setSearchError('');
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&addressdetails=1`);
       const data = await res.json();
       if (data.length === 0) {
         setSearchError('Location not found.');
         return;
       }
-      const { lat, lon } = data[0];
+      const result = data[0];
+      const lat = parseFloat(result.lat);
+      const lon = parseFloat(result.lon);
+
+      // Smart zoom based on result type
+      let altitude = 500000; // default
+      const type = result.type || '';
+      const cls = result.class || '';
+      const bbox = result.boundingbox;
+
+      if (cls === 'building' || type === 'house' || type === 'building' || type === 'yes') {
+        altitude = 500;
+      } else if (type === 'aerodrome' || type === 'airport') {
+        altitude = 3000;
+      } else if (type === 'city' || type === 'town' || type === 'village' || type === 'hamlet') {
+        altitude = 15000;
+      } else if (type === 'state' || type === 'province' || type === 'region') {
+        altitude = 300000;
+      } else if (type === 'country') {
+        altitude = 1500000;
+      } else if (type === 'continent') {
+        altitude = 8000000;
+      } else if (bbox) {
+        // Use bounding box to estimate appropriate zoom
+        const latSpan = Math.abs(parseFloat(bbox[1]) - parseFloat(bbox[0]));
+        const lonSpan = Math.abs(parseFloat(bbox[3]) - parseFloat(bbox[2]));
+        const maxSpan = Math.max(latSpan, lonSpan);
+        if (maxSpan < 0.005) altitude = 500;
+        else if (maxSpan < 0.05) altitude = 3000;
+        else if (maxSpan < 0.5) altitude = 20000;
+        else if (maxSpan < 5) altitude = 200000;
+        else altitude = 1000000;
+      }
+
       const viewer = (window as any).__cesiumViewer;
       if (viewer && !viewer.isDestroyed()) {
         viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(parseFloat(lon), parseFloat(lat), 500000),
-          duration: 2,
+          destination: Cesium.Cartesian3.fromDegrees(lon, lat, altitude),
+          duration: 2.5,
+          easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
         });
       }
       setSearchQuery('');
