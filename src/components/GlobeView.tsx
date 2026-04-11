@@ -168,7 +168,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, dens
     viewer.clock.shouldAnimate = true;
     viewer.camera.percentageChanged = 0.05;
 
-    const layerNames = ['aircraft', 'aircraftTrails', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts', 'airspaceClosures', 'liveCameras', 'oilPipelines', 'subseaCables'];
+    const layerNames = ['aircraft', 'aircraftTrails', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'thermalAnomalies', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts', 'airspaceClosures', 'liveCameras', 'oilPipelines', 'subseaCables'];
     layerNames.forEach(name => {
       const ds = new Cesium.CustomDataSource(name);
       viewer.dataSources.add(ds);
