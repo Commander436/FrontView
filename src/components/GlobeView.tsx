@@ -5,7 +5,7 @@ import { Ship } from '@/types/globe';
 import { CITIES } from '@/data/cities';
 import { MILITARY_BASES } from '@/data/militaryBases';
 import { CONFLICT_ZONES } from '@/data/conflictZones';
-import { SAMPLE_SHIPS } from '@/data/ships';
+// SAMPLE_SHIPS removed — using live AIS data
 import { INFRASTRUCTURE } from '@/data/infrastructure';
 import { GPS_INTERFERENCE_ZONES } from '@/data/gpsInterference';
 import { INTERNET_BLACKOUTS } from '@/data/internetBlackouts';
