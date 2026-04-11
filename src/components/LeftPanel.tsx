@@ -1,4 +1,5 @@
 import { LayerVisibility, DisplayMode, DensityMode } from '@/types/globe';
+import { WebSDRPanel } from './WebSDRPanel';
 import {
   Shield, Clock, Plane, Anchor, Satellite,
   Swords, MapPin, Eye, CloudRain, Crosshair,
@@ -18,6 +19,7 @@ interface LeftPanelProps {
   onSetDensity: (d: DensityMode) => void;
   aircraftCount: number;
   satelliteCount: number;
+  shipCount: number;
   collapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -51,6 +53,7 @@ const EXTRAS_TOGGLES: ToggleItem[] = [
 
 const DATA_LAYER_TOGGLES: ToggleItem[] = [
   { key: 'weatherRadar', label: 'WEATHER RADAR', icon: CloudRain },
+  { key: 'weatherSatellite', label: 'SAT IMAGERY (GOES/VIIRS)', icon: Globe },
   { key: 'conflicts', label: 'CONFLICTS', icon: Swords },
   { key: 'gpsInterference', label: 'GPS INTERFERENCE', icon: SignalZero },
   { key: 'internetBlackouts', label: 'INTERNET BLACKOUTS', icon: WifiOff },
@@ -133,7 +136,7 @@ function Category({ title, icon: Icon, items, layers, onToggle, getCount, defaul
 export function LeftPanel({
   layers, onToggleLayer, displayMode, onSetDisplayMode,
   density, onSetDensity,
-  aircraftCount, satelliteCount, collapsed, onToggleCollapse,
+  aircraftCount, satelliteCount, shipCount, collapsed, onToggleCollapse,
 }: LeftPanelProps) {
   const [time, setTime] = useState(new Date());
 
@@ -147,6 +150,7 @@ export function LeftPanel({
   const getCount = (key: string) => {
     if (key === 'aircraft') return aircraftCount;
     if (key === 'satellites') return satelliteCount;
+    if (key === 'ships') return shipCount;
     return undefined;
   };
 
@@ -206,6 +210,7 @@ export function LeftPanel({
           <Category title="Infrastructure" icon={Factory} items={INFRA_TOGGLES} layers={layers} onToggle={onToggleLayer} />
           <Category title="Extras" icon={Box} items={EXTRAS_TOGGLES} layers={layers} onToggle={onToggleLayer} />
           <Category title="Threat Intelligence" icon={BarChart3} items={DATA_LAYER_TOGGLES} layers={layers} onToggle={onToggleLayer} />
+          <WebSDRPanel />
 
           {/* System Status */}
           <div className="mt-auto pt-3 border-t border-foreground/8">

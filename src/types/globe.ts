@@ -184,4 +184,5 @@ export interface LayerVisibility {
   airspaceClosures: boolean;
   liveCameras: boolean;
   scopeOverlay: boolean;
+  weatherSatellite: boolean;
 }
