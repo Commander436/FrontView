@@ -22,6 +22,7 @@ export function useGlobeState() {
     airspaceClosures: false,
     liveCameras: false,
     scopeOverlay: false,
+    weatherSatellite: false,
   });
 
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null);
