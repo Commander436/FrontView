@@ -1,4 +1,5 @@
 import { LayerVisibility, DisplayMode, DensityMode } from '@/types/globe';
+import { WebSDRPanel } from './WebSDRPanel';
 import {
   Shield, Clock, Plane, Anchor, Satellite,
   Swords, MapPin, Eye, CloudRain, Crosshair,
@@ -52,6 +53,7 @@ const EXTRAS_TOGGLES: ToggleItem[] = [
 
 const DATA_LAYER_TOGGLES: ToggleItem[] = [
   { key: 'weatherRadar', label: 'WEATHER RADAR', icon: CloudRain },
+  { key: 'weatherSatellite', label: 'SAT IMAGERY (GOES/VIIRS)', icon: Globe },
   { key: 'conflicts', label: 'CONFLICTS', icon: Swords },
   { key: 'gpsInterference', label: 'GPS INTERFERENCE', icon: SignalZero },
   { key: 'internetBlackouts', label: 'INTERNET BLACKOUTS', icon: WifiOff },
