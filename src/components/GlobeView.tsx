@@ -118,6 +118,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
   const weatherLayerRef = useRef<any>(null);
+  const weatherSatLayerRef = useRef<any>(null);
 
   // Persistent entity maps — NEVER cleared during updates
   const aircraftEntities = useRef<Map<string, any>>(new Map());
@@ -126,6 +127,8 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   const aircraftTrailHistory = useRef<Map<string, { lon: number; lat: number; alt: number; time: number }[]>>(new Map());
 
   const satEntities = useRef<Map<string, any>>(new Map());
+  const shipEntities = useRef<Map<string, any>>(new Map());
+  const shipLastSeen = useRef<Map<string, number>>(new Map());
   const selectedSatOrbit = useRef<string | null>(null);
 
   const vehiclesRef = useRef<any[]>([]);
