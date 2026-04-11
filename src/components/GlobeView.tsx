@@ -955,7 +955,43 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     };
   }, [layers.weatherRadar]);
 
-  // ========== 3D BUILDINGS ==========
+  // ========== WEATHER SATELLITE IMAGERY (GOES-16 / Himawari via NASA GIBS) ==========
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (!layers.weatherSatellite) {
+      if (weatherSatLayerRef.current) {
+        viewer.imageryLayers.remove(weatherSatLayerRef.current);
+        weatherSatLayerRef.current = null;
+      }
+      return;
+    }
+
+    // NASA GIBS WMTS — VIIRS True Color (free, no key)
+    const provider = new Cesium.WebMapTileServiceImageryProvider({
+      url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/wmts.cgi',
+      layer: 'VIIRS_SNPP_CorrectedReflectance_TrueColor',
+      style: 'default',
+      tileMatrixSetID: '250m',
+      format: 'image/jpeg',
+      maximumLevel: 8,
+      tilingScheme: new Cesium.GeographicTilingScheme(),
+      credit: 'NASA EOSDIS GIBS',
+    });
+    const layer = viewer.imageryLayers.addImageryProvider(provider);
+    layer.alpha = 0.55;
+    layer.brightness = 1.1;
+    weatherSatLayerRef.current = layer;
+
+    return () => {
+      if (weatherSatLayerRef.current && viewer && !viewer.isDestroyed()) {
+        viewer.imageryLayers.remove(weatherSatLayerRef.current);
+        weatherSatLayerRef.current = null;
+      }
+    };
+  }, [layers.weatherSatellite]);
+
+
   useEffect(() => {
     const viewer = viewerRef.current;
     const ds = dsRefs.current['buildings'];
