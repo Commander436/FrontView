@@ -146,6 +146,7 @@ const Index = () => {
         onSetDensity={setDensity}
         aircraftCount={aircraft.length}
         satelliteCount={satellites.length}
+        shipCount={liveShips.length}
         collapsed={leftCollapsed}
         onToggleCollapse={() => setLeftCollapsed(!leftCollapsed)}
       />
@@ -156,6 +157,7 @@ const Index = () => {
             aircraft={aircraft}
             satellites={satellites}
             thermalAnomalies={thermalAnomalies}
+            liveShips={liveShips}
             density={density}
             displayMode={displayMode}
             onEntitySelect={selectEntity}
