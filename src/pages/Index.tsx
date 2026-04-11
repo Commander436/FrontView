@@ -6,6 +6,7 @@ import { ScopeOverlay } from '@/components/ScopeOverlay';
 import { useGlobeState } from '@/hooks/useGlobeState';
 import { useAircraft } from '@/hooks/useAircraft';
 import { useSatellites } from '@/hooks/useSatellites';
+import { useFIRMS } from '@/hooks/useFIRMS';
 import { Search } from 'lucide-react';
 import { DisplayMode } from '@/types/globe';
 
@@ -38,6 +39,7 @@ const Index = () => {
 
   const { aircraft } = useAircraft(layers.aircraft, layers.militaryFlights);
   const { satellites } = useSatellites(layers.satellites);
+  const { anomalies: thermalAnomalies } = useFIRMS(layers.conflicts);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
   const [searchQuery, setSearchQuery] = useState('');
