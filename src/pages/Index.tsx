@@ -153,6 +153,7 @@ const Index = () => {
             layers={layers}
             aircraft={aircraft}
             satellites={satellites}
+            thermalAnomalies={thermalAnomalies}
             density={density}
             displayMode={displayMode}
             onEntitySelect={selectEntity}
