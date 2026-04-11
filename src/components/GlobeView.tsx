@@ -385,27 +385,64 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     }
   }, [aircraft, layers.aircraft, layers.militaryFlights]);
 
-  // ========== SHIPS ==========
+  // ========== SHIPS (live AIS, persistent, incremental) ==========
   useEffect(() => {
     const ds = dsRefs.current['ships'];
     if (!ds) return;
     ds.show = layers.ships;
-    ds.entities.removeAll();
     if (!layers.ships) return;
 
-    SAMPLE_SHIPS.forEach(s => {
-      if (!passDensity(s.mmsi, density)) return;
-      ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0),
-        billboard: {
-          image: makeShipIcon(s.type), width: 16, height: 16,
-          disableDepthTestDistance: 0,
-          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.5),
-        },
-        properties: { entityType: 'ship', entityData: JSON.stringify(s) },
-      });
+    const nowMs = Date.now();
+    const now = Cesium.JulianDate.now();
+    const future = Cesium.JulianDate.addSeconds(now, 10, new Cesium.JulianDate());
+    const currentIds = new Set<string>();
+
+    liveShips.forEach(s => {
+      if (s.latitude == null || s.longitude == null) return;
+      currentIds.add(s.mmsi);
+      shipLastSeen.current.set(s.mmsi, nowMs);
+
+      const newPos = Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0);
+      const existing = shipEntities.current.get(s.mmsi);
+
+      if (existing) {
+        const posProperty = existing.position;
+        if (posProperty && posProperty.addSample) {
+          posProperty.addSample(future, newPos);
+        }
+        existing.properties.entityData = JSON.stringify(s);
+      } else {
+        if (!passDensity(s.mmsi, density)) return;
+        const posProperty = new Cesium.SampledPositionProperty();
+        posProperty.setInterpolationOptions({ interpolationDegree: 1, interpolationAlgorithm: Cesium.LinearApproximation });
+        posProperty.addSample(now, newPos);
+        posProperty.addSample(future, newPos);
+
+        const entity = ds.entities.add({
+          id: `ship-${s.mmsi}`,
+          position: posProperty,
+          billboard: {
+            image: makeShipIcon(s.type), width: 16, height: 16,
+            disableDepthTestDistance: 0,
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.5),
+          },
+          properties: { entityType: 'ship', entityData: JSON.stringify(s) },
+        });
+        shipEntities.current.set(s.mmsi, entity);
+      }
     });
-  }, [layers.ships, density]);
+
+    // Remove stale ships (> 30 min)
+    const staleThreshold = nowMs - 30 * 60 * 1000;
+    for (const [mmsi, lastSeen] of shipLastSeen.current) {
+      if (!currentIds.has(mmsi) && lastSeen < staleThreshold) {
+        const entity = shipEntities.current.get(mmsi);
+        if (entity) ds.entities.remove(entity);
+        shipEntities.current.delete(mmsi);
+        shipLastSeen.current.delete(mmsi);
+      }
+    }
+  }, [liveShips, layers.ships]);
 
   // ========== SATELLITES (persistent, no density filter, no availability) ==========
   useEffect(() => {
