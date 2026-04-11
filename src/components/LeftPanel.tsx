@@ -18,6 +18,7 @@ interface LeftPanelProps {
   onSetDensity: (d: DensityMode) => void;
   aircraftCount: number;
   satelliteCount: number;
+  shipCount: number;
   collapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -133,7 +134,7 @@ function Category({ title, icon: Icon, items, layers, onToggle, getCount, defaul
 export function LeftPanel({
   layers, onToggleLayer, displayMode, onSetDisplayMode,
   density, onSetDensity,
-  aircraftCount, satelliteCount, collapsed, onToggleCollapse,
+  aircraftCount, satelliteCount, shipCount, collapsed, onToggleCollapse,
 }: LeftPanelProps) {
   const [time, setTime] = useState(new Date());
 
@@ -147,6 +148,7 @@ export function LeftPanel({
   const getCount = (key: string) => {
     if (key === 'aircraft') return aircraftCount;
     if (key === 'satellites') return satelliteCount;
+    if (key === 'ships') return shipCount;
     return undefined;
   };
 
