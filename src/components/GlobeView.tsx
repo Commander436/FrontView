@@ -515,6 +515,52 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, dens
     });
   }, [layers.conflicts, density]);
 
+  // ========== THERMAL ANOMALIES (NASA FIRMS) ==========
+  useEffect(() => {
+    const ds = dsRefs.current['thermalAnomalies'];
+    if (!ds) return;
+    ds.show = layers.conflicts;
+    ds.entities.removeAll();
+    if (!layers.conflicts || thermalAnomalies.length === 0) return;
+
+    // Only show top 2000 by FRP to avoid performance issues
+    const sorted = [...thermalAnomalies].sort((a, b) => b.frp - a.frp).slice(0, 2000);
+
+    sorted.forEach(t => {
+      const intensity = Math.min(1, t.frp / 100);
+      const size = 3 + intensity * 8;
+      const color = t.frp > 50 ? '#ff2200' : t.frp > 10 ? '#ff6600' : '#ff9900';
+
+      ds.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(t.longitude, t.latitude, 50),
+        point: {
+          pixelSize: size,
+          color: Cesium.Color.fromCssColorString(color).withAlpha(0.6 + intensity * 0.3),
+          outlineColor: Cesium.Color.fromCssColorString(color).withAlpha(0.9),
+          outlineWidth: 1,
+          disableDepthTestDistance: 0,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 2.0, 2e7, 0.3),
+        },
+        properties: {
+          entityType: 'conflict',
+          entityData: JSON.stringify({
+            name: `Thermal Anomaly`,
+            region: `${t.latitude.toFixed(2)}°, ${t.longitude.toFixed(2)}°`,
+            countries: [],
+            latitude: t.latitude,
+            longitude: t.longitude,
+            radius: 0,
+            severity: t.frp > 50 ? 'high' : t.frp > 10 ? 'medium' : 'low',
+            eventType: 'thermal',
+            summary: `FRP: ${t.frp.toFixed(1)} MW | Brightness: ${t.brightness.toFixed(0)}K | Confidence: ${t.confidence} | Satellite: ${t.satellite}`,
+            timestamp: `${t.acqDate} ${t.acqTime}`,
+            source: 'NASA FIRMS (VIIRS)',
+          }),
+        },
+      });
+    });
+  }, [thermalAnomalies, layers.conflicts]);
+
   // ========== CITIES ==========
   useEffect(() => {
     const ds = dsRefs.current['cities'];
