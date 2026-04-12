@@ -240,10 +240,9 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     const trailDs = dsRefs.current['aircraftTrails'];
     const viewer = viewerRef.current;
     if (!ds || !trailDs || !viewer) return;
-    ds.show = layers.aircraft;
-    trailDs.show = layers.aircraft;
-
-    if (!layers.aircraft) return;
+    // Datasource always shown — visibility is per-entity via billboard.show
+    ds.show = true;
+    trailDs.show = true;
 
     const now = Cesium.JulianDate.now();
     const future = Cesium.JulianDate.addSeconds(now, 10, new Cesium.JulianDate());
