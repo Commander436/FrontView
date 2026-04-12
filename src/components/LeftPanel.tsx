@@ -1,5 +1,4 @@
 import { LayerVisibility, DisplayMode, DensityMode } from '@/types/globe';
-import { WebSDRPanel } from './WebSDRPanel';
 import {
   Shield, Clock, Plane, Anchor, Satellite,
   Swords, MapPin, Eye, CloudRain, Crosshair,
@@ -210,7 +209,6 @@ export function LeftPanel({
           <Category title="Infrastructure" icon={Factory} items={INFRA_TOGGLES} layers={layers} onToggle={onToggleLayer} />
           <Category title="Extras" icon={Box} items={EXTRAS_TOGGLES} layers={layers} onToggle={onToggleLayer} />
           <Category title="Threat Intelligence" icon={BarChart3} items={DATA_LAYER_TOGGLES} layers={layers} onToggle={onToggleLayer} />
-          <WebSDRPanel />
 
           {/* System Status */}
           <div className="mt-auto pt-3 border-t border-foreground/8">
