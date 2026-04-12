@@ -259,16 +259,22 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       currentIds.add(a.icao24);
       aircraftLastSeen.current.set(a.icao24, nowMs);
 
-      // Trail history
+      const isMil = !!(a.isMilitary || a.militaryClassification);
+
+      // UI-ONLY visibility: classification never affects ingestion
+      const showCivilian = layers.aircraft && !isMil;
+      const showMilitary = layers.militaryFlights && isMil;
+      const shouldShow = showCivilian || showMilitary;
+
+      // Trail history (always track, regardless of visibility)
       let trail = aircraftTrailHistory.current.get(a.icao24);
       if (!trail) { trail = []; aircraftTrailHistory.current.set(a.icao24, trail); }
       trail.push({ lon: a.longitude, lat: a.latitude, alt: Math.max(a.altitude || 0, 500), time: nowMs });
       while (trail.length > 0 && (nowMs - trail[0].time) > TRAIL_MAX_AGE) trail.shift();
 
-      const existing = aircraftEntities.current.get(a.icao24);
-      const isMil = a.isMilitary || (layers.militaryFlights && !!a.militaryClassification);
       const icon = getAircraftIcon(a);
       const newPos = Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, Math.max(a.altitude || 0, 500));
+      const existing = aircraftEntities.current.get(a.icao24);
 
       if (existing) {
         // INCREMENTAL UPDATE — never recreate
@@ -278,10 +284,11 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         }
         existing.billboard.image = icon;
         existing.billboard.rotation = Cesium.Math.toRadians(-(a.heading || 0));
+        existing.billboard.show = shouldShow;
         existing.properties.entityData = JSON.stringify(a);
       } else {
         // New aircraft — density applied only at spawn
-        if (!isMil && !passDensity(a.icao24, density)) return;
+        if (!passDensity(a.icao24, density)) return;
         aircraftSpawnDensity.current.add(a.icao24);
 
         const posProperty = new Cesium.SampledPositionProperty();
@@ -300,9 +307,9 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
             width: isMil ? 22 : 16, height: isMil ? 22 : 16,
             rotation: Cesium.Math.toRadians(-(a.heading || 0)),
             alignedAxis: Cesium.Cartesian3.UNIT_Z,
-            // Globe occlusion: 0 means depth test always, so icons behind Earth are hidden
             disableDepthTestDistance: 0,
             scaleByDistance: new Cesium.NearFarScalar(1e5, 1.8, 2e7, 0.4),
+            show: shouldShow,
           },
           properties: { entityType: 'aircraft', entityData: JSON.stringify(a) },
         });
