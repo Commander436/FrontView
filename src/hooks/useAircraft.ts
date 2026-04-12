@@ -34,7 +34,8 @@ function parseAircraft(raw: any[]): Aircraft[] {
         heading: s.track || s.true_heading || 0,
         verticalRate: s.baro_rate != null ? s.baro_rate * 0.00508 : (s.geom_rate != null ? s.geom_rate * 0.00508 : 0),
         onGround: s.alt_baro === 'ground' || !!s.ground,
-        lastContact: s.seen != null ? Math.floor(Date.now() / 1000) - s.seen : 0,
+        // s.seen = seconds since last message received. Use directly as lastContact.
+        lastContact: s.seen != null ? s.seen : 0,
         squawk: s.squawk || undefined,
         positionSource: s.type || 'adsb_icao',
         airline: s.ownOp || (s.flight && s.flight.length >= 3 ? s.flight.substring(0, 3) : 'Unknown'),
@@ -62,7 +63,7 @@ function parseAircraft(raw: any[]): Aircraft[] {
     });
 }
 
-export function useAircraft(enabled: boolean, _classifyMilitary: boolean) {
+export function useAircraft(civilianEnabled: boolean, militaryEnabled: boolean) {
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +72,9 @@ export function useAircraft(enabled: boolean, _classifyMilitary: boolean) {
   const regionIndex = useRef(0);
   const accumulatedRef = useRef<Map<string, Aircraft>>(new Map());
   const logTimer = useRef<ReturnType<typeof setInterval>>();
+
+  // Aircraft should be fetched if EITHER civilian or military toggle is on
+  const enabled = civilianEnabled || militaryEnabled;
 
   const fetchRegionBatch = useCallback(async () => {
     if (!enabled) return;
@@ -106,7 +110,7 @@ export function useAircraft(enabled: boolean, _classifyMilitary: boolean) {
         }
       }
 
-      // Remove stale entries (not seen for 5 minutes)
+      // Remove stale entries (lastContact > 5 minutes = 300 seconds)
       for (const [id, a] of accumulatedRef.current) {
         if (a.lastContact > 300) {
           accumulatedRef.current.delete(id);

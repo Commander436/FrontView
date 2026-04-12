@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { LayerVisibility, Aircraft, SatelliteData, DensityMode, DisplayMode } from '@/types/globe';
 import { ThermalAnomaly } from '@/hooks/useFIRMS';
 import { Ship } from '@/types/globe';
+import { RadioStation } from '@/hooks/useRadioStations';
 import { CITIES } from '@/data/cities';
 import { MILITARY_BASES } from '@/data/militaryBases';
 import { CONFLICT_ZONES } from '@/data/conflictZones';
@@ -108,12 +109,14 @@ interface GlobeViewProps {
   satellites: SatelliteData[];
   thermalAnomalies: ThermalAnomaly[];
   liveShips: Ship[];
+  radioStations: RadioStation[];
   density: DensityMode;
   displayMode: DisplayMode;
   onEntitySelect: (entity: any) => void;
+  onRadioStationClick: (station: RadioStation) => void;
 }
 
-export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, density, displayMode, onEntitySelect }: GlobeViewProps) {
+export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, radioStations, density, displayMode, onEntitySelect, onRadioStationClick }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
@@ -173,7 +176,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     viewer.clock.shouldAnimate = true;
     viewer.camera.percentageChanged = 0.05;
 
-    const layerNames = ['aircraft', 'aircraftTrails', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'thermalAnomalies', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts', 'airspaceClosures', 'liveCameras', 'oilPipelines', 'subseaCables'];
+    const layerNames = ['aircraft', 'aircraftTrails', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'thermalAnomalies', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts', 'airspaceClosures', 'liveCameras', 'oilPipelines', 'subseaCables', 'radioStations'];
     layerNames.forEach(name => {
       const ds = new Cesium.CustomDataSource(name);
       viewer.dataSources.add(ds);
@@ -1180,6 +1183,65 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       vehiclesRef.current = [];
     };
   }, [layers.streetTraffic, displayMode]);
+
+  // ========== GLOBAL RADIO STATIONS ==========
+  const radioClickRef = useRef(onRadioStationClick);
+  radioClickRef.current = onRadioStationClick;
+
+  useEffect(() => {
+    const ds = dsRefs.current['radioStations'];
+    const viewer = viewerRef.current;
+    if (!ds || !viewer) return;
+    ds.show = layers.radioStations;
+    ds.entities.removeAll();
+    if (!layers.radioStations || radioStations.length === 0) return;
+
+    const ICON_RADIO = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="#a78bfa80" stroke="#a78bfa" stroke-width="1"/><circle cx="6" cy="6" r="1.5" fill="#a78bfa"/></svg>`);
+
+    // Show up to 2000 stations
+    radioStations.slice(0, 2000).forEach(s => {
+      if (!s.latitude || !s.longitude) return;
+      ds.entities.add({
+        id: `radio-${s.id}`,
+        position: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0),
+        billboard: {
+          image: ICON_RADIO, width: 10, height: 10,
+          disableDepthTestDistance: 0,
+          scaleByDistance: new Cesium.NearFarScalar(1e4, 1.5, 5e6, 0.2),
+        },
+        label: {
+          text: s.name, font: '8px Orbitron',
+          fillColor: Cesium.Color.fromCssColorString('#a78bfa'),
+          outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, -10),
+          disableDepthTestDistance: 0,
+          scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
+          translucencyByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
+        },
+        properties: { entityType: 'radioStation', entityData: JSON.stringify(s) },
+      });
+    });
+
+    // Handle clicks on radio stations
+    const clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    clickHandler.setInputAction((click: any) => {
+      const picked = viewer.scene.pick(click.position);
+      if (Cesium.defined(picked) && picked.id) {
+        try {
+          const entityType = picked.id.properties?.entityType?.getValue();
+          if (entityType === 'radioStation') {
+            const data = JSON.parse(picked.id.properties?.entityData?.getValue());
+            radioClickRef.current(data);
+          }
+        } catch {}
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    return () => {
+      clickHandler.destroy();
+    };
+  }, [radioStations, layers.radioStations]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

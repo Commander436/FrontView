@@ -3,11 +3,13 @@ import { LeftPanel } from '@/components/LeftPanel';
 import { RightPanel } from '@/components/RightPanel';
 import { GlobeView } from '@/components/GlobeView';
 import { ScopeOverlay } from '@/components/ScopeOverlay';
+import { RadioPlayer } from '@/components/RadioPlayer';
 import { useGlobeState } from '@/hooks/useGlobeState';
 import { useAircraft } from '@/hooks/useAircraft';
 import { useSatellites } from '@/hooks/useSatellites';
 import { useFIRMS } from '@/hooks/useFIRMS';
 import { useAIS } from '@/hooks/useAIS';
+import { useRadioStations, RadioStation } from '@/hooks/useRadioStations';
 import { Search } from 'lucide-react';
 import { DisplayMode } from '@/types/globe';
 
@@ -38,14 +40,17 @@ const Index = () => {
     density, setDensity,
   } = useGlobeState();
 
+  // Aircraft enabled if EITHER civilian or military toggle is on
   const { aircraft } = useAircraft(layers.aircraft, layers.militaryFlights);
   const { satellites } = useSatellites(layers.satellites);
   const { anomalies: thermalAnomalies } = useFIRMS(layers.conflicts);
   const { ships: liveShips } = useAIS(layers.ships);
+  const { stations: radioStations } = useRadioStations(layers.radioStations);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
+  const [activeRadioStation, setActiveRadioStation] = useState<RadioStation | null>(null);
 
   // Camera coordinate tracking
   useEffect(() => {
@@ -79,8 +84,7 @@ const Index = () => {
       const lat = parseFloat(result.lat);
       const lon = parseFloat(result.lon);
 
-      // Smart zoom based on result type
-      let altitude = 500000; // default
+      let altitude = 500000;
       const type = result.type || '';
       const cls = result.class || '';
       const bbox = result.boundingbox;
@@ -98,7 +102,6 @@ const Index = () => {
       } else if (type === 'continent') {
         altitude = 8000000;
       } else if (bbox) {
-        // Use bounding box to estimate appropriate zoom
         const latSpan = Math.abs(parseFloat(bbox[1]) - parseFloat(bbox[0]));
         const lonSpan = Math.abs(parseFloat(bbox[3]) - parseFloat(bbox[2]));
         const maxSpan = Math.max(latSpan, lonSpan);
@@ -121,6 +124,10 @@ const Index = () => {
     } catch {
       setSearchError('Search failed.');
     }
+  };
+
+  const handleRadioStationSelect = (station: RadioStation) => {
+    setActiveRadioStation(station);
   };
 
   const globeFilter = useMemo(() => {
@@ -158,9 +165,11 @@ const Index = () => {
             satellites={satellites}
             thermalAnomalies={thermalAnomalies}
             liveShips={liveShips}
+            radioStations={radioStations}
             density={density}
             displayMode={displayMode}
             onEntitySelect={selectEntity}
+            onRadioStationClick={handleRadioStationSelect}
           />
         </div>
         {showScope && <ScopeOverlay mode={displayMode === 'normal' ? 'scope-only' : displayMode} />}
@@ -205,6 +214,11 @@ const Index = () => {
           <div>LON {cameraCoords.lon >= 0 ? 'E' : 'W'}{Math.abs(cameraCoords.lon).toFixed(4)}°</div>
           <div className="opacity-60">MGRS {toMGRS(cameraCoords.lat, cameraCoords.lon)}</div>
         </div>
+
+        {/* Radio player */}
+        {activeRadioStation && (
+          <RadioPlayer station={activeRadioStation} onClose={() => setActiveRadioStation(null)} />
+        )}
       </main>
       <RightPanel
         selectedEntity={selectedEntity}
