@@ -3,7 +3,6 @@ import { Aircraft } from '@/types/globe';
 import { classifyAircraft } from '@/utils/militaryClassification';
 
 // airplanes.live — free, no key, CORS-enabled, ADSBexchange-compatible readsb format
-// Regional fetching for global coverage
 const REGIONS = [
   { name: 'North America', lat: 40, lon: -100, dist: 500 },
   { name: 'Europe', lat: 48, lon: 10, dist: 500 },
@@ -17,7 +16,7 @@ const REGIONS = [
   { name: 'Russia', lat: 60, lon: 80, dist: 500 },
 ];
 
-function parseAircraft(raw: any[], classifyMilitary: boolean): Aircraft[] {
+function parseAircraft(raw: any[]): Aircraft[] {
   return raw
     .filter((s: any) => s.lat != null && s.lon != null && typeof s.lat === 'number' && typeof s.lon === 'number')
     .map((s: any) => {
@@ -50,7 +49,8 @@ function parseAircraft(raw: any[], classifyMilitary: boolean): Aircraft[] {
         route: s.route || undefined,
       };
 
-      if (classifyMilitary && !isMil) {
+      // Classify by callsign/speed/altitude if not already flagged
+      if (!isMil) {
         const cls = classifyAircraft(a.callsign, a.velocity, a.altitude);
         if (cls.isMilitary) {
           a.militaryClassification = cls.classification;
@@ -62,7 +62,7 @@ function parseAircraft(raw: any[], classifyMilitary: boolean): Aircraft[] {
     });
 }
 
-export function useAircraft(enabled: boolean, classifyMilitary: boolean) {
+export function useAircraft(enabled: boolean, _classifyMilitary: boolean) {
   const [aircraft, setAircraft] = useState<Aircraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +70,7 @@ export function useAircraft(enabled: boolean, classifyMilitary: boolean) {
   const backoffRef = useRef(10000);
   const regionIndex = useRef(0);
   const accumulatedRef = useRef<Map<string, Aircraft>>(new Map());
+  const logTimer = useRef<ReturnType<typeof setInterval>>();
 
   const fetchRegionBatch = useCallback(async () => {
     if (!enabled) return;
@@ -77,7 +78,6 @@ export function useAircraft(enabled: boolean, classifyMilitary: boolean) {
       setLoading(true);
       setError(null);
 
-      // Fetch 2 regions per cycle for faster global coverage
       const batch = [];
       for (let i = 0; i < 2; i++) {
         const region = REGIONS[(regionIndex.current + i) % REGIONS.length];
@@ -89,7 +89,7 @@ export function useAircraft(enabled: boolean, classifyMilitary: boolean) {
               return { region: region.name, ac: data.ac || [] };
             })
             .catch((err) => {
-              console.warn(`[AIRCRAFT] ${region.name} fetch failed:`, err.message);
+              console.warn(`[ACFT] ${region.name} fetch failed:`, err.message);
               return { region: region.name, ac: [] };
             })
         );
@@ -97,20 +97,17 @@ export function useAircraft(enabled: boolean, classifyMilitary: boolean) {
       regionIndex.current = (regionIndex.current + 2) % REGIONS.length;
 
       const results = await Promise.all(batch);
-      const now = Date.now();
 
-      // Merge into accumulated map
+      // Merge into accumulated map — NEVER clear
       for (const result of results) {
-        const parsed = parseAircraft(result.ac, classifyMilitary);
+        const parsed = parseAircraft(result.ac);
         for (const a of parsed) {
           accumulatedRef.current.set(a.icao24, a);
         }
       }
 
       // Remove stale entries (not seen for 5 minutes)
-      const staleThreshold = now - 5 * 60 * 1000;
       for (const [id, a] of accumulatedRef.current) {
-        const age = a.lastContact ? now / 1000 - (now / 1000 - a.lastContact) : 0;
         if (a.lastContact > 300) {
           accumulatedRef.current.delete(id);
         }
@@ -120,12 +117,29 @@ export function useAircraft(enabled: boolean, classifyMilitary: boolean) {
       backoffRef.current = 10000;
     } catch (err: any) {
       setError(err.message);
-      console.warn('Aircraft fetch failed:', err.message);
+      console.warn('[ACFT] fetch failed:', err.message);
       backoffRef.current = Math.min(backoffRef.current * 1.5, 60000);
     } finally {
       setLoading(false);
     }
-  }, [enabled, classifyMilitary]);
+  }, [enabled]);
+
+  // Logging every 10s
+  useEffect(() => {
+    if (!enabled) return;
+    logTimer.current = setInterval(() => {
+      const all = accumulatedRef.current.size;
+      const mil = Array.from(accumulatedRef.current.values()).filter(a => a.isMilitary).length;
+      const civ = all - mil;
+      console.log(`[ACFT] Total entities: ${all}`);
+      console.log(`[ACFT] Visible civilian: ${civ}`);
+      console.log(`[ACFT] Visible military: ${mil}`);
+      if (all > 0 && civ === 0 && mil === 0) {
+        console.error('[ACFT ERROR] Classification/visibility logic hiding all aircraft — fix UI filters, not ingestion.');
+      }
+    }, 10000);
+    return () => { if (logTimer.current) clearInterval(logTimer.current); };
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) {
