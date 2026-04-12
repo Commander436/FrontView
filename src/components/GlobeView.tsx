@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { LayerVisibility, Aircraft, SatelliteData, DensityMode, DisplayMode } from '@/types/globe';
 import { ThermalAnomaly } from '@/hooks/useFIRMS';
 import { Ship } from '@/types/globe';
+import { RadioStation } from '@/hooks/useRadioStations';
 import { CITIES } from '@/data/cities';
 import { MILITARY_BASES } from '@/data/militaryBases';
 import { CONFLICT_ZONES } from '@/data/conflictZones';
@@ -108,12 +109,14 @@ interface GlobeViewProps {
   satellites: SatelliteData[];
   thermalAnomalies: ThermalAnomaly[];
   liveShips: Ship[];
+  radioStations: RadioStation[];
   density: DensityMode;
   displayMode: DisplayMode;
   onEntitySelect: (entity: any) => void;
+  onRadioStationClick: (station: RadioStation) => void;
 }
 
-export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, density, displayMode, onEntitySelect }: GlobeViewProps) {
+export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, radioStations, density, displayMode, onEntitySelect, onRadioStationClick }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
