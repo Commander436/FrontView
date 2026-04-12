@@ -43,6 +43,7 @@ const INFRA_TOGGLES: ToggleItem[] = [
   { key: 'ports', label: 'PORTS', icon: Ship },
   { key: 'energy', label: 'ENERGY & PIPELINES', icon: Zap },
   { key: 'telecom', label: 'TELECOM & CABLES', icon: Radio },
+  { key: 'radioStations', label: 'GLOBAL RADIO STATIONS', icon: Radio },
   { key: 'bases', label: 'MILITARY BASES', icon: Shield },
 ];
 
