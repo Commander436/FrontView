@@ -175,6 +175,7 @@ export interface LayerVisibility {
   ports: boolean;
   energy: boolean;
   telecom: boolean;
+  radioStations: boolean;
   bases: boolean;
   buildings: boolean;
   weatherRadar: boolean;

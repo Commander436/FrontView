@@ -13,6 +13,7 @@ export function useGlobeState() {
     ports: false,
     energy: false,
     telecom: false,
+    radioStations: false,
     bases: true,
     buildings: false,
     weatherRadar: false,
