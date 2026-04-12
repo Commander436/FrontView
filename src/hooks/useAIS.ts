@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Ship } from '@/types/globe';
 
-// AISStream.io — free, no key, no signup, global WebSocket AIS feed
+// AISStream.io requires a free API key (signup at aisstream.io).
+// Without a key the WebSocket will reject the connection.
+// For now we attempt connection and gracefully handle rejection.
 const AIS_WS_URL = 'wss://stream.aisstream.io/v0/stream';
 
 function classifyShipType(typeNum: number): Ship['type'] {
@@ -22,9 +24,16 @@ export function useAIS(enabled: boolean) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const logTimer = useRef<ReturnType<typeof setInterval>>();
+  const failCount = useRef(0);
 
   const connect = useCallback(() => {
     if (!enabled) return;
+    // After 3 consecutive failures, stop retrying to avoid spam
+    if (failCount.current >= 3) {
+      setError('AIS unavailable (no demo data). AISStream.io requires an API key.');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     try {
@@ -35,8 +44,8 @@ export function useAIS(enabled: boolean) {
         setWsConnected(true);
         setError(null);
         setLoading(false);
+        failCount.current = 0;
         console.log('[AIS] WebSocket connected: true');
-        // Subscribe to GLOBAL positions — no bounding box restriction
         ws.send(JSON.stringify({
           APIkey: '',
           BoundingBoxes: [[[-90, -180], [90, 180]]],
@@ -80,20 +89,23 @@ export function useAIS(enabled: boolean) {
       ws.onclose = () => {
         setWsConnected(false);
         wsRef.current = null;
-        setError('AISStream temporarily unavailable (no demo data).');
+        failCount.current++;
         console.log('[AIS] WebSocket connected: false');
-        // Reconnect after 10s
-        if (enabled) {
-          reconnectTimer.current = setTimeout(connect, 10000);
+
+        if (failCount.current >= 3) {
+          setError('AIS unavailable (no demo data). AISStream.io requires an API key.');
+          setLoading(false);
+        } else if (enabled) {
+          // Exponential backoff: 10s, 20s, 40s
+          const delay = 10000 * Math.pow(2, failCount.current - 1);
+          reconnectTimer.current = setTimeout(connect, delay);
         }
       };
     } catch {
       setWsConnected(false);
-      setError('AISStream temporarily unavailable (no demo data).');
+      failCount.current++;
+      setError('AIS unavailable (no demo data).');
       setLoading(false);
-      if (enabled) {
-        reconnectTimer.current = setTimeout(connect, 10000);
-      }
     }
   }, [enabled]);
 
@@ -101,7 +113,6 @@ export function useAIS(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const pushInterval = setInterval(() => {
-      // Remove stale (> 30 min)
       const stale = Date.now() - 30 * 60 * 1000;
       for (const [mmsi, s] of shipMapRef.current) {
         if (new Date(s.lastUpdate).getTime() < stale) {
@@ -115,17 +126,17 @@ export function useAIS(enabled: boolean) {
     return () => clearInterval(pushInterval);
   }, [enabled]);
 
-  // Logging every 10s
+  // Logging every 30s (reduced from 10s to avoid spam)
   useEffect(() => {
     if (!enabled) return;
     logTimer.current = setInterval(() => {
       const count = shipMapRef.current.size;
-      console.log(`[AIS] WebSocket connected: ${wsRef.current?.readyState === WebSocket.OPEN}`);
+      console.log(`[AIS] Connected: ${wsRef.current?.readyState === WebSocket.OPEN}`);
       console.log(`[AIS] Live ship count: ${count}`);
       if (count > 0 && count < 50) {
-        console.warn('[AIS ERROR] Likely demo data in use — remove all demo AIS sources.');
+        console.warn('[AIS ERROR] Demo AIS detected — remove all fallback sources.');
       }
-    }, 10000);
+    }, 30000);
     return () => { if (logTimer.current) clearInterval(logTimer.current); };
   }, [enabled]);
 
@@ -134,6 +145,7 @@ export function useAIS(enabled: boolean) {
       setShips([]);
       shipMapRef.current.clear();
       setWsConnected(false);
+      failCount.current = 0;
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       return;
