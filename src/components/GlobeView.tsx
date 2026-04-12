@@ -955,37 +955,60 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     };
   }, [layers.weatherRadar]);
 
-  // ========== WEATHER SATELLITE IMAGERY (GOES-16 / Himawari via NASA GIBS) ==========
+  // ========== WEATHER SATELLITE IMAGERY (GOES/Himawari/Meteosat via NASA GIBS) ==========
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
     if (!layers.weatherSatellite) {
       if (weatherSatLayerRef.current) {
-        viewer.imageryLayers.remove(weatherSatLayerRef.current);
+        weatherSatLayerRef.current.forEach((l: any) => {
+          try { viewer.imageryLayers.remove(l); } catch {}
+        });
         weatherSatLayerRef.current = null;
       }
       return;
     }
 
-    // NASA GIBS WMTS — VIIRS True Color (free, no key)
-    const provider = new Cesium.WebMapTileServiceImageryProvider({
-      url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/wmts.cgi',
-      layer: 'VIIRS_SNPP_CorrectedReflectance_TrueColor',
-      style: 'default',
-      tileMatrixSetID: '250m',
-      format: 'image/jpeg',
-      maximumLevel: 8,
-      tilingScheme: new Cesium.GeographicTilingScheme(),
-      credit: 'NASA EOSDIS GIBS',
-    });
-    const layer = viewer.imageryLayers.addImageryProvider(provider);
-    layer.alpha = 0.55;
-    layer.brightness = 1.1;
-    weatherSatLayerRef.current = layer;
+    // Use yesterday's date for GIBS (today may not be available yet)
+    const yesterday = new Date(Date.now() - 86400000);
+    const dateStr = yesterday.toISOString().slice(0, 10);
+    const layers_added: any[] = [];
+
+    try {
+      // MODIS Terra True Color — global, well-aligned, daily
+      const modisTerra = new Cesium.WebMapTileServiceImageryProvider({
+        url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/wmts.cgi',
+        layer: 'MODIS_Terra_CorrectedReflectance_TrueColor',
+        style: 'default',
+        tileMatrixSetID: '250m',
+        format: 'image/jpeg',
+        maximumLevel: 8,
+        tilingScheme: new Cesium.GeographicTilingScheme(),
+        credit: 'NASA EOSDIS GIBS',
+        times: new Cesium.TimeIntervalCollection([
+          new Cesium.TimeInterval({
+            start: Cesium.JulianDate.fromIso8601(dateStr),
+            stop: Cesium.JulianDate.fromIso8601(dateStr),
+          }),
+        ]),
+      });
+      const layer1 = viewer.imageryLayers.addImageryProvider(modisTerra);
+      layer1.alpha = 0.45;
+      layer1.brightness = 1.05;
+      layer1.contrast = 1.05;
+      // Ensure weather sits above base imagery but below entities
+      layers_added.push(layer1);
+    } catch (e) {
+      console.warn('[WX ERROR] Weather tiles failed to load — hiding layer.', e);
+    }
+
+    weatherSatLayerRef.current = layers_added;
 
     return () => {
       if (weatherSatLayerRef.current && viewer && !viewer.isDestroyed()) {
-        viewer.imageryLayers.remove(weatherSatLayerRef.current);
+        weatherSatLayerRef.current.forEach((l: any) => {
+          try { viewer.imageryLayers.remove(l); } catch {}
+        });
         weatherSatLayerRef.current = null;
       }
     };
