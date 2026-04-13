@@ -112,12 +112,14 @@ interface GlobeViewProps {
   radioStations: RadioStation[];
   density: DensityMode;
   displayMode: DisplayMode;
+  selectedEntity: { type: string; data: any } | null;
   onEntitySelect: (entity: any) => void;
   onRadioStationClick: (station: RadioStation) => void;
 }
 
-export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, radioStations, density, displayMode, onEntitySelect, onRadioStationClick }: GlobeViewProps) {
+export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, radioStations, density, displayMode, selectedEntity, onEntitySelect, onRadioStationClick }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const selectedEntityRef = useRef(selectedEntity);
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
   const weatherLayerRef = useRef<any>(null);
