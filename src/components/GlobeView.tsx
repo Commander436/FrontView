@@ -112,12 +112,15 @@ interface GlobeViewProps {
   radioStations: RadioStation[];
   density: DensityMode;
   displayMode: DisplayMode;
+  selectedEntity: { type: string; data: any } | null;
   onEntitySelect: (entity: any) => void;
   onRadioStationClick: (station: RadioStation) => void;
 }
 
-export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, radioStations, density, displayMode, onEntitySelect, onRadioStationClick }: GlobeViewProps) {
+export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, radioStations, density, displayMode, selectedEntity, onEntitySelect, onRadioStationClick }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const selectedEntityRef = useRef(selectedEntity);
+  selectedEntityRef.current = selectedEntity;
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
   const weatherLayerRef = useRef<any>(null);
@@ -268,11 +271,14 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       const showMilitary = layers.militaryFlights && isMil;
       const shouldShow = showCivilian || showMilitary;
 
-      // Trail history (always track, regardless of visibility)
-      let trail = aircraftTrailHistory.current.get(a.icao24);
-      if (!trail) { trail = []; aircraftTrailHistory.current.set(a.icao24, trail); }
-      trail.push({ lon: a.longitude, lat: a.latitude, alt: Math.max(a.altitude || 0, 500), time: nowMs });
-      while (trail.length > 0 && (nowMs - trail[0].time) > TRAIL_MAX_AGE) trail.shift();
+      // Trail history — only track for the currently selected aircraft
+      const selectedAcId = selectedEntityRef.current?.type === 'aircraft' ? (selectedEntityRef.current.data as Aircraft).icao24 : null;
+      if (selectedAcId === a.icao24) {
+        let trail = aircraftTrailHistory.current.get(a.icao24);
+        if (!trail) { trail = []; aircraftTrailHistory.current.set(a.icao24, trail); }
+        trail.push({ lon: a.longitude, lat: a.latitude, alt: Math.max(a.altitude || 0, 500), time: nowMs });
+        while (trail.length > 0 && (nowMs - trail[0].time) > TRAIL_MAX_AGE) trail.shift();
+      }
 
       const icon = getAircraftIcon(a);
       const newPos = Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, Math.max(a.altitude || 0, 500));
@@ -332,8 +338,13 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       }
     }
 
-    // ---- Render trails + predicted paths ----
+    // ---- Render trails + predicted paths (only for selected aircraft) ----
     trailDs.entities.removeAll();
+    const selectedAcIdForTrail = selectedEntityRef.current?.type === 'aircraft' ? (selectedEntityRef.current.data as Aircraft).icao24 : null;
+    // Clean up trail history for non-selected aircraft
+    for (const id of aircraftTrailHistory.current.keys()) {
+      if (id !== selectedAcIdForTrail) aircraftTrailHistory.current.delete(id);
+    }
     for (const [id, trail] of aircraftTrailHistory.current) {
       if (trail.length < 2) continue;
       const trailCoords: number[] = [];
@@ -392,7 +403,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         });
       }
     }
-  }, [aircraft, layers.aircraft, layers.militaryFlights]);
+  }, [aircraft, layers.aircraft, layers.militaryFlights, selectedEntity]);
 
   // ========== SHIPS (live AIS, persistent, incremental) ==========
   useEffect(() => {
@@ -1194,34 +1205,50 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     if (!ds || !viewer) return;
     ds.show = layers.radioStations;
     ds.entities.removeAll();
-    if (!layers.radioStations || radioStations.length === 0) return;
+    if (!layers.radioStations || !radioStations || radioStations.length === 0) return;
 
-    const ICON_RADIO = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="#a78bfa80" stroke="#a78bfa" stroke-width="1"/><circle cx="6" cy="6" r="1.5" fill="#a78bfa"/></svg>`);
+    try {
+      const ICON_RADIO = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="#a78bfa80" stroke="#a78bfa" stroke-width="1"/><circle cx="6" cy="6" r="1.5" fill="#a78bfa"/></svg>`);
 
-    // Show up to 2000 stations
-    radioStations.slice(0, 2000).forEach(s => {
-      if (!s.latitude || !s.longitude) return;
-      ds.entities.add({
-        id: `radio-${s.id}`,
-        position: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0),
-        billboard: {
-          image: ICON_RADIO, width: 10, height: 10,
-          disableDepthTestDistance: 0,
-          scaleByDistance: new Cesium.NearFarScalar(1e4, 1.5, 5e6, 0.2),
-        },
-        label: {
-          text: s.name, font: '8px Orbitron',
-          fillColor: Cesium.Color.fromCssColorString('#a78bfa'),
-          outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          pixelOffset: new Cesium.Cartesian2(0, -10),
-          disableDepthTestDistance: 0,
-          scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
-          translucencyByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
-        },
-        properties: { entityType: 'radioStation', entityData: JSON.stringify(s) },
-      });
-    });
+      // Cap at 2000 stations for stability
+      const stationCount = radioStations.length;
+      const capped = stationCount > 2000;
+      if (capped) console.log('[RADIO] Station count capped at 2000 for stability.');
+      const stationsToRender = radioStations.slice(0, 2000);
+
+      for (let i = 0; i < stationsToRender.length; i++) {
+        const s = stationsToRender[i];
+        if (!s.latitude || !s.longitude) continue;
+        ds.entities.add({
+          id: `radio-${s.id}`,
+          position: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0),
+          billboard: {
+            image: ICON_RADIO, width: 10, height: 10,
+            disableDepthTestDistance: 0,
+            scaleByDistance: new Cesium.NearFarScalar(1e4, 1.5, 5e6, 0.2),
+          },
+          label: {
+            text: s.name, font: '8px Orbitron',
+            fillColor: Cesium.Color.fromCssColorString('#a78bfa'),
+            outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            pixelOffset: new Cesium.Cartesian2(0, -10),
+            disableDepthTestDistance: 0,
+            scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
+            translucencyByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
+          },
+          properties: { entityType: 'radioStation', entityData: JSON.stringify(s) },
+        });
+      }
+    } catch (e) {
+      if (e instanceof RangeError) {
+        console.error('[RADIO] RangeError caught — disabling radio layer:', e.message);
+        ds.entities.removeAll();
+        ds.show = false;
+      } else {
+        console.warn('[RADIO] Radio station rendering error:', e);
+      }
+    }
 
     // Handle clicks on radio stations
     const clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);

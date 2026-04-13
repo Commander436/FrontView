@@ -132,12 +132,8 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="On Ground" value={a.onGround ? 'Yes' : 'No'} />
           <InfoRow label="Position Source" value={a.positionSource || 'Unknown'} />
 
-          {a.route && (
-            <>
-              <SectionHeader label="Route" />
-              <InfoRow label="Route" value={a.route} />
-            </>
-          )}
+          <SectionHeader label="Route" />
+          <InfoRow label="Destination" value={a.route || 'Unknown'} />
 
           {a.militaryClassification && (
             <>
@@ -145,9 +141,6 @@ function renderDetails(entity: SelectedEntity) {
               <InfoRow label="Classification" value={a.militaryClassification.toUpperCase()} highlight />
             </>
           )}
-
-          <SectionHeader label="Timing" />
-          <InfoRow label="Last Contact" value={a.lastContact ? new Date(a.lastContact * 1000).toUTCString() : 'Unknown'} />
         </>
       );
     }
