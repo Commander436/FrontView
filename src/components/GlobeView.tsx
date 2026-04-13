@@ -120,6 +120,7 @@ interface GlobeViewProps {
 export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, radioStations, density, displayMode, selectedEntity, onEntitySelect, onRadioStationClick }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedEntityRef = useRef(selectedEntity);
+  selectedEntityRef.current = selectedEntity;
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
   const weatherLayerRef = useRef<any>(null);

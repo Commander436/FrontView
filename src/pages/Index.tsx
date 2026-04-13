@@ -168,6 +168,7 @@ const Index = () => {
             radioStations={radioStations}
             density={density}
             displayMode={displayMode}
+            selectedEntity={selectedEntity}
             onEntitySelect={selectEntity}
             onRadioStationClick={handleRadioStationSelect}
           />
