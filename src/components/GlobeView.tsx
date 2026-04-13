@@ -1205,34 +1205,50 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     if (!ds || !viewer) return;
     ds.show = layers.radioStations;
     ds.entities.removeAll();
-    if (!layers.radioStations || radioStations.length === 0) return;
+    if (!layers.radioStations || !radioStations || radioStations.length === 0) return;
 
-    const ICON_RADIO = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="#a78bfa80" stroke="#a78bfa" stroke-width="1"/><circle cx="6" cy="6" r="1.5" fill="#a78bfa"/></svg>`);
+    try {
+      const ICON_RADIO = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="#a78bfa80" stroke="#a78bfa" stroke-width="1"/><circle cx="6" cy="6" r="1.5" fill="#a78bfa"/></svg>`);
 
-    // Show up to 2000 stations
-    radioStations.slice(0, 2000).forEach(s => {
-      if (!s.latitude || !s.longitude) return;
-      ds.entities.add({
-        id: `radio-${s.id}`,
-        position: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0),
-        billboard: {
-          image: ICON_RADIO, width: 10, height: 10,
-          disableDepthTestDistance: 0,
-          scaleByDistance: new Cesium.NearFarScalar(1e4, 1.5, 5e6, 0.2),
-        },
-        label: {
-          text: s.name, font: '8px Orbitron',
-          fillColor: Cesium.Color.fromCssColorString('#a78bfa'),
-          outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          pixelOffset: new Cesium.Cartesian2(0, -10),
-          disableDepthTestDistance: 0,
-          scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
-          translucencyByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
-        },
-        properties: { entityType: 'radioStation', entityData: JSON.stringify(s) },
-      });
-    });
+      // Cap at 2000 stations for stability
+      const stationCount = radioStations.length;
+      const capped = stationCount > 2000;
+      if (capped) console.log('[RADIO] Station count capped at 2000 for stability.');
+      const stationsToRender = radioStations.slice(0, 2000);
+
+      for (let i = 0; i < stationsToRender.length; i++) {
+        const s = stationsToRender[i];
+        if (!s.latitude || !s.longitude) continue;
+        ds.entities.add({
+          id: `radio-${s.id}`,
+          position: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0),
+          billboard: {
+            image: ICON_RADIO, width: 10, height: 10,
+            disableDepthTestDistance: 0,
+            scaleByDistance: new Cesium.NearFarScalar(1e4, 1.5, 5e6, 0.2),
+          },
+          label: {
+            text: s.name, font: '8px Orbitron',
+            fillColor: Cesium.Color.fromCssColorString('#a78bfa'),
+            outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            pixelOffset: new Cesium.Cartesian2(0, -10),
+            disableDepthTestDistance: 0,
+            scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
+            translucencyByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
+          },
+          properties: { entityType: 'radioStation', entityData: JSON.stringify(s) },
+        });
+      }
+    } catch (e) {
+      if (e instanceof RangeError) {
+        console.error('[RADIO] RangeError caught — disabling radio layer:', e.message);
+        ds.entities.removeAll();
+        ds.show = false;
+      } else {
+        console.warn('[RADIO] Radio station rendering error:', e);
+      }
+    }
 
     // Handle clicks on radio stations
     const clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
