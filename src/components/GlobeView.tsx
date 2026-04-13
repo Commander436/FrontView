@@ -403,7 +403,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         });
       }
     }
-  }, [aircraft, layers.aircraft, layers.militaryFlights]);
+  }, [aircraft, layers.aircraft, layers.militaryFlights, selectedEntity]);
 
   // ========== SHIPS (live AIS, persistent, incremental) ==========
   useEffect(() => {
