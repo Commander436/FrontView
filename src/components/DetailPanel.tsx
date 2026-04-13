@@ -146,8 +146,8 @@ function renderDetails(entity: SelectedEntity) {
             </>
           )}
 
-          <SectionHeader label="Timing" />
-          <InfoRow label="Last Contact" value={a.lastContact ? new Date(a.lastContact * 1000).toUTCString() : 'Unknown'} />
+          <SectionHeader label="Route" />
+          <InfoRow label="Destination" value={a.route || 'Unknown'} />
         </>
       );
     }

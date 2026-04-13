@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Ship } from '@/types/globe';
 
-// AISStream.io requires a free API key (signup at aisstream.io).
-// Without a key the WebSocket will reject the connection.
-// For now we attempt connection and gracefully handle rejection.
 const AIS_WS_URL = 'wss://stream.aisstream.io/v0/stream';
 
 function classifyShipType(typeNum: number): Ship['type'] {
@@ -25,12 +22,12 @@ export function useAIS(enabled: boolean) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const logTimer = useRef<ReturnType<typeof setInterval>>();
   const failCount = useRef(0);
+  const zeroShipTicks = useRef(0);
 
   const connect = useCallback(() => {
     if (!enabled) return;
-    // After 3 consecutive failures, stop retrying to avoid spam
     if (failCount.current >= 3) {
-      setError('AIS unavailable (no demo data). AISStream.io requires an API key.');
+      setError('AIS disabled (no working AIS endpoint configured).');
       setLoading(false);
       return;
     }
@@ -45,9 +42,10 @@ export function useAIS(enabled: boolean) {
         setError(null);
         setLoading(false);
         failCount.current = 0;
+        zeroShipTicks.current = 0;
         console.log('[AIS] WebSocket connected: true');
+        // Try connecting without a key — AISStream may accept or reject
         ws.send(JSON.stringify({
-          APIkey: '',
           BoundingBoxes: [[[-90, -180], [90, 180]]],
           FilterMessageTypes: ['PositionReport'],
         }));
@@ -77,7 +75,7 @@ export function useAIS(enabled: boolean) {
             lastUpdate: meta.time_utc || new Date().toISOString(),
           };
           shipMapRef.current.set(mmsi, ship);
-        } catch { /* skip malformed messages */ }
+        } catch { /* skip malformed */ }
       };
 
       ws.onerror = () => {
@@ -93,10 +91,9 @@ export function useAIS(enabled: boolean) {
         console.log('[AIS] WebSocket connected: false');
 
         if (failCount.current >= 3) {
-          setError('AIS unavailable (no demo data). AISStream.io requires an API key.');
+          setError('AIS disabled (no working AIS endpoint configured).');
           setLoading(false);
         } else if (enabled) {
-          // Exponential backoff: 10s, 20s, 40s
           const delay = 10000 * Math.pow(2, failCount.current - 1);
           reconnectTimer.current = setTimeout(connect, delay);
         }
@@ -104,7 +101,7 @@ export function useAIS(enabled: boolean) {
     } catch {
       setWsConnected(false);
       failCount.current++;
-      setError('AIS unavailable (no demo data).');
+      setError('AIS disabled (no working AIS endpoint configured).');
       setLoading(false);
     }
   }, [enabled]);
@@ -119,24 +116,33 @@ export function useAIS(enabled: boolean) {
           shipMapRef.current.delete(mmsi);
         }
       }
-      if (shipMapRef.current.size > 0) {
-        setShips(Array.from(shipMapRef.current.values()));
-      }
+      setShips(Array.from(shipMapRef.current.values()));
     }, 5000);
     return () => clearInterval(pushInterval);
   }, [enabled]);
 
-  // Logging every 30s (reduced from 10s to avoid spam)
+  // Debug logging every 10s
   useEffect(() => {
     if (!enabled) return;
     logTimer.current = setInterval(() => {
+      const connected = wsRef.current?.readyState === WebSocket.OPEN;
       const count = shipMapRef.current.size;
-      console.log(`[AIS] Connected: ${wsRef.current?.readyState === WebSocket.OPEN}`);
+      console.log(`[AIS] Connected: ${connected}`);
       console.log(`[AIS] Live ship count: ${count}`);
+
+      if (connected && count === 0) {
+        zeroShipTicks.current++;
+        if (zeroShipTicks.current >= 3) {
+          console.error('[AIS ERROR] Connected but no ships — check parsing/filtering, do not assume "no traffic".');
+        }
+      } else {
+        zeroShipTicks.current = 0;
+      }
+
       if (count > 0 && count < 50) {
         console.warn('[AIS ERROR] Demo AIS detected — remove all fallback sources.');
       }
-    }, 30000);
+    }, 10000);
     return () => { if (logTimer.current) clearInterval(logTimer.current); };
   }, [enabled]);
 
@@ -146,6 +152,7 @@ export function useAIS(enabled: boolean) {
       shipMapRef.current.clear();
       setWsConnected(false);
       failCount.current = 0;
+      zeroShipTicks.current = 0;
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       return;

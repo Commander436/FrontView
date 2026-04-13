@@ -268,11 +268,14 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       const showMilitary = layers.militaryFlights && isMil;
       const shouldShow = showCivilian || showMilitary;
 
-      // Trail history (always track, regardless of visibility)
-      let trail = aircraftTrailHistory.current.get(a.icao24);
-      if (!trail) { trail = []; aircraftTrailHistory.current.set(a.icao24, trail); }
-      trail.push({ lon: a.longitude, lat: a.latitude, alt: Math.max(a.altitude || 0, 500), time: nowMs });
-      while (trail.length > 0 && (nowMs - trail[0].time) > TRAIL_MAX_AGE) trail.shift();
+      // Trail history — only track for the currently selected aircraft
+      const selectedAcId = selectedEntityRef.current?.type === 'aircraft' ? (selectedEntityRef.current.data as Aircraft).icao24 : null;
+      if (selectedAcId === a.icao24) {
+        let trail = aircraftTrailHistory.current.get(a.icao24);
+        if (!trail) { trail = []; aircraftTrailHistory.current.set(a.icao24, trail); }
+        trail.push({ lon: a.longitude, lat: a.latitude, alt: Math.max(a.altitude || 0, 500), time: nowMs });
+        while (trail.length > 0 && (nowMs - trail[0].time) > TRAIL_MAX_AGE) trail.shift();
+      }
 
       const icon = getAircraftIcon(a);
       const newPos = Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, Math.max(a.altitude || 0, 500));
@@ -332,8 +335,13 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       }
     }
 
-    // ---- Render trails + predicted paths ----
+    // ---- Render trails + predicted paths (only for selected aircraft) ----
     trailDs.entities.removeAll();
+    const selectedAcIdForTrail = selectedEntityRef.current?.type === 'aircraft' ? (selectedEntityRef.current.data as Aircraft).icao24 : null;
+    // Clean up trail history for non-selected aircraft
+    for (const id of aircraftTrailHistory.current.keys()) {
+      if (id !== selectedAcIdForTrail) aircraftTrailHistory.current.delete(id);
+    }
     for (const [id, trail] of aircraftTrailHistory.current) {
       if (trail.length < 2) continue;
       const trailCoords: number[] = [];
