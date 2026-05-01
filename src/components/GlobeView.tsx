@@ -1,8 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { LayerVisibility, Aircraft, SatelliteData, DensityMode, DisplayMode } from '@/types/globe';
+import { LayerVisibility, Aircraft, SatelliteData, DisplayMode } from '@/types/globe';
 import { ThermalAnomaly } from '@/hooks/useFIRMS';
 import { Ship } from '@/types/globe';
-import { RadioStation } from '@/hooks/useRadioStations';
 import { CITIES } from '@/data/cities';
 import { MILITARY_BASES } from '@/data/militaryBases';
 import { CONFLICT_ZONES } from '@/data/conflictZones';
@@ -11,7 +10,6 @@ import { INFRASTRUCTURE } from '@/data/infrastructure';
 import { GPS_INTERFERENCE_ZONES } from '@/data/gpsInterference';
 import { INTERNET_BLACKOUTS } from '@/data/internetBlackouts';
 import { AIRSPACE_CLOSURES } from '@/data/airspaceClosures';
-import { LIVE_CAMERAS } from '@/data/liveCameras';
 import { OIL_PIPELINES } from '@/data/oilPipelines';
 import { SUBSEA_CABLES } from '@/data/subseaCables';
 import { twoline2satrec, propagate, gstime, eciToGeodetic } from 'satellite.js';
@@ -34,7 +32,6 @@ const ICON_ENERGY_SOLAR = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width=
 const ICON_ENERGY_NUCLEAR = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="none" stroke="#facc15" stroke-width="1"><circle cx="8" cy="8" r="2"/><circle cx="8" cy="8" r="5"/></g></svg>`);
 const ICON_ENERGY_HYDRO = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#38bdf8" stroke="#0ea5e9" stroke-width="0.5"><path d="M2 4L14 4L14 12L2 12Z" fill="#38bdf820"/></g></svg>`);
 const ICON_TELECOM = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="none" stroke="#a78bfa" stroke-width="0.8"><line x1="8" y1="4" x2="8" y2="14"/><circle cx="8" cy="4" r="1.2" fill="#a78bfa"/></g></svg>`);
-const ICON_CAMERA = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#34d399" stroke="#10b981" stroke-width="0.5"><rect x="2" y="4" width="12" height="9" rx="1.5"/><circle cx="8" cy="8.5" r="2.5" fill="none" stroke-width="1"/></g></svg>`);
 const ICON_LANDING = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="#22d3ee40" stroke="#22d3ee" stroke-width="1"/><circle cx="6" cy="6" r="1.5" fill="#22d3ee"/></svg>`);
 
 const SHIP_COLORS: Record<string, string> = { cargo: '#3b82f6', tanker: '#f59e0b', passenger: '#8b5cf6', fishing: '#10b981', military: '#ef4444' };
@@ -55,13 +52,6 @@ function getInfraIcon(type: string) {
 }
 
 // ---- Helpers ----
-function passDensity(id: string, density: DensityMode): boolean {
-  if (density === 'dense') return true;
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash) + id.charCodeAt(i);
-  return (Math.abs(hash) % 100) < (density === 'moderate' ? 50 : 25);
-}
-
 function computeOrbitPath(tle1: string, tle2: string, steps = 90): number[] {
   try {
     const satrec = twoline2satrec(tle1, tle2);
@@ -109,27 +99,22 @@ interface GlobeViewProps {
   satellites: SatelliteData[];
   thermalAnomalies: ThermalAnomaly[];
   liveShips: Ship[];
-  radioStations: RadioStation[];
-  density: DensityMode;
   displayMode: DisplayMode;
   selectedEntity: { type: string; data: any } | null;
   onEntitySelect: (entity: any) => void;
-  onRadioStationClick: (station: RadioStation) => void;
 }
 
-export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, radioStations, density, displayMode, selectedEntity, onEntitySelect, onRadioStationClick }: GlobeViewProps) {
+export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, displayMode, selectedEntity, onEntitySelect }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedEntityRef = useRef(selectedEntity);
   selectedEntityRef.current = selectedEntity;
   const viewerRef = useRef<any>(null);
   const dsRefs = useRef<Record<string, any>>({});
   const weatherLayerRef = useRef<any>(null);
-  const weatherSatLayerRef = useRef<any>(null);
 
   // Persistent entity maps — NEVER cleared during updates
   const aircraftEntities = useRef<Map<string, any>>(new Map());
   const aircraftLastSeen = useRef<Map<string, number>>(new Map());
-  const aircraftSpawnDensity = useRef<Set<string>>(new Set());
   const aircraftTrailHistory = useRef<Map<string, { lon: number; lat: number; alt: number; time: number }[]>>(new Map());
 
   const satEntities = useRef<Map<string, any>>(new Map());
@@ -179,7 +164,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     viewer.clock.shouldAnimate = true;
     viewer.camera.percentageChanged = 0.05;
 
-    const layerNames = ['aircraft', 'aircraftTrails', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'thermalAnomalies', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts', 'airspaceClosures', 'liveCameras', 'oilPipelines', 'subseaCables', 'radioStations'];
+    const layerNames = ['aircraft', 'aircraftTrails', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'thermalAnomalies', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts', 'airspaceClosures', 'oilPipelines', 'subseaCables'];
     layerNames.forEach(name => {
       const ds = new Cesium.CustomDataSource(name);
       viewer.dataSources.add(ds);
