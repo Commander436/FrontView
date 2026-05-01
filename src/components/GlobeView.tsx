@@ -281,9 +281,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         existing.properties.entityData = JSON.stringify(a);
       } else {
         // New aircraft — density applied only at spawn
-        if (!passDensity(a.icao24, density)) return;
-        aircraftSpawnDensity.current.add(a.icao24);
-
+        
         const posProperty = new Cesium.SampledPositionProperty();
         posProperty.setInterpolationOptions({
           interpolationDegree: 1,
@@ -318,7 +316,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         if (entity) ds.entities.remove(entity);
         aircraftEntities.current.delete(id);
         aircraftLastSeen.current.delete(id);
-        aircraftSpawnDensity.current.delete(id);
         aircraftTrailHistory.current.delete(id);
       }
     }
@@ -417,7 +414,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         }
         existing.properties.entityData = JSON.stringify(s);
       } else {
-        if (!passDensity(s.mmsi, density)) return;
         const posProperty = new Cesium.SampledPositionProperty();
         posProperty.setInterpolationOptions({ interpolationDegree: 1, interpolationAlgorithm: Cesium.LinearApproximation });
         posProperty.addSample(now, newPos);
@@ -504,7 +500,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     if (!layers.bases) return;
 
     MILITARY_BASES.forEach(b => {
-      if (!passDensity(b.name, density)) return;
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(b.longitude, b.latitude, 0),
         billboard: {
@@ -515,7 +510,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         properties: { entityType: 'base', entityData: JSON.stringify(b) },
       });
     });
-  }, [layers.bases, density]);
+  }, [layers.bases]);
 
   // ========== CONFLICT ZONES ==========
   useEffect(() => {
@@ -531,7 +526,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     };
 
     CONFLICT_ZONES.forEach(z => {
-      if (!passDensity(z.name, density)) return;
       const evtColor = EVENT_COLORS[z.eventType || 'combat'] || '#ff3333';
       const glowAlpha = z.severity === 'high' ? 0.7 : z.severity === 'medium' ? 0.5 : 0.3;
       const age = z.timestamp ? (Date.now() - new Date(z.timestamp).getTime()) / 86400000 : 1;
@@ -560,7 +554,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         properties: { entityType: 'conflict', entityData: JSON.stringify(z) },
       });
     });
-  }, [layers.conflicts, density]);
+  }, [layers.conflicts]);
 
   // ========== THERMAL ANOMALIES (NASA FIRMS) ==========
   useEffect(() => {
@@ -617,7 +611,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     if (!layers.cities) return;
 
     CITIES.forEach(c => {
-      if (!passDensity(c.name, density)) return;
       const size = c.tier === 1 ? 6 : c.tier === 2 ? 4 : 3;
       const labelDist = c.tier === 1 ? 1.2e7 : c.tier === 2 ? 6e6 : 3e6;
       const pointDist = c.tier === 1 ? 2e7 : c.tier === 2 ? 1.2e7 : 6e6;
@@ -642,7 +635,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         properties: { entityType: 'city', entityData: JSON.stringify(c) },
       });
     });
-  }, [layers.cities, density]);
+  }, [layers.cities]);
 
   // ========== INFRASTRUCTURE ==========
   useEffect(() => {
@@ -663,8 +656,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         (item.category === 'energy' && showEnergy) ||
         (item.category === 'telecom' && showTelecom);
       if (!shouldShow) return;
-      if (!passDensity(item.id, density)) return;
-
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(item.longitude, item.latitude, 0),
         billboard: {
@@ -685,7 +676,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         properties: { entityType: 'infrastructure', entityData: JSON.stringify(item) },
       });
     });
-  }, [layers.airports, layers.ports, layers.energy, layers.telecom, density]);
+  }, [layers.airports, layers.ports, layers.energy, layers.telecom]);
 
   // ========== OIL PIPELINES ==========
   useEffect(() => {
@@ -782,7 +773,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     };
 
     GPS_INTERFERENCE_ZONES.forEach(z => {
-      if (!passDensity(z.id, density)) return;
       const score = z.interferenceScore;
       const hexCoords: number[] = [];
       for (let i = 0; i < 6; i++) {
@@ -803,7 +793,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         properties: { entityType: 'gps_interference', entityData: JSON.stringify(z) },
       });
     });
-  }, [layers.gpsInterference, density, displayMode]);
+  }, [layers.gpsInterference, displayMode]);
 
   // ========== INTERNET BLACKOUTS ==========
   useEffect(() => {
@@ -827,7 +817,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     };
 
     INTERNET_BLACKOUTS.forEach(b => {
-      if (!passDensity(b.id, density)) return;
       if (!b.polygon || b.polygon.length < 3) return;
       const coords = b.polygon.flatMap(([lon, lat]) => [lon, lat]);
       ds.entities.add({
@@ -842,7 +831,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         properties: { entityType: 'internet_blackout', entityData: JSON.stringify(b) },
       });
     });
-  }, [layers.internetBlackouts, density, displayMode]);
+  }, [layers.internetBlackouts, displayMode]);
 
   // ========== AIRSPACE CLOSURES ==========
   useEffect(() => {
@@ -885,41 +874,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     });
   }, [layers.airspaceClosures, displayMode]);
 
-  // ========== LIVE CAMERAS ==========
-  useEffect(() => {
-    const ds = dsRefs.current['liveCameras'];
-    const viewer = viewerRef.current;
-    if (!ds || !viewer) return;
-    ds.show = layers.liveCameras;
-    ds.entities.removeAll();
-    if (!layers.liveCameras) return;
-
-    LIVE_CAMERAS.forEach(cam => {
-      if (!passDensity(cam.id, density)) return;
-      const statusDot = cam.status === 'online' ? '●' : '○';
-      ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(cam.longitude, cam.latitude, 50),
-        billboard: {
-          image: ICON_CAMERA, width: 16, height: 16,
-          disableDepthTestDistance: 0,
-          scaleByDistance: new Cesium.NearFarScalar(1e4, 1.5, 5e5, 0),
-        },
-        label: {
-          text: `${statusDot} ${cam.name}`, font: '9px Orbitron',
-          fillColor: Cesium.Color.fromCssColorString(cam.status === 'online' ? '#34d399' : '#888888'),
-          outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          pixelOffset: new Cesium.Cartesian2(0, -14),
-          disableDepthTestDistance: 0,
-          scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 3e5, 0),
-          translucencyByDistance: new Cesium.NearFarScalar(1e4, 1, 3e5, 0),
-        },
-        properties: { entityType: 'live_camera', entityData: JSON.stringify(cam) },
-      });
-    });
-  }, [layers.liveCameras, density]);
-
-  // ========== WEATHER RADAR ==========
+    // ========== WEATHER RADAR ==========
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
@@ -960,67 +915,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     };
   }, [layers.weatherRadar]);
 
-  // ========== WEATHER SATELLITE IMAGERY (GOES/Himawari/Meteosat via NASA GIBS) ==========
-  useEffect(() => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
-    if (!layers.weatherSatellite) {
-      if (weatherSatLayerRef.current) {
-        weatherSatLayerRef.current.forEach((l: any) => {
-          try { viewer.imageryLayers.remove(l); } catch {}
-        });
-        weatherSatLayerRef.current = null;
-      }
-      return;
-    }
-
-    // Use yesterday's date for GIBS (today may not be available yet)
-    const yesterday = new Date(Date.now() - 86400000);
-    const dateStr = yesterday.toISOString().slice(0, 10);
-    const layers_added: any[] = [];
-
-    try {
-      // MODIS Terra True Color — global, well-aligned, daily
-      const modisTerra = new Cesium.WebMapTileServiceImageryProvider({
-        url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/wmts.cgi',
-        layer: 'MODIS_Terra_CorrectedReflectance_TrueColor',
-        style: 'default',
-        tileMatrixSetID: '250m',
-        format: 'image/jpeg',
-        maximumLevel: 8,
-        tilingScheme: new Cesium.GeographicTilingScheme(),
-        credit: 'NASA EOSDIS GIBS',
-        times: new Cesium.TimeIntervalCollection([
-          new Cesium.TimeInterval({
-            start: Cesium.JulianDate.fromIso8601(dateStr),
-            stop: Cesium.JulianDate.fromIso8601(dateStr),
-          }),
-        ]),
-      });
-      const layer1 = viewer.imageryLayers.addImageryProvider(modisTerra);
-      layer1.alpha = 0.45;
-      layer1.brightness = 1.05;
-      layer1.contrast = 1.05;
-      // Ensure weather sits above base imagery but below entities
-      layers_added.push(layer1);
-    } catch (e) {
-      console.warn('[WX ERROR] Weather tiles failed to load — hiding layer.', e);
-    }
-
-    weatherSatLayerRef.current = layers_added;
-
-    return () => {
-      if (weatherSatLayerRef.current && viewer && !viewer.isDestroyed()) {
-        weatherSatLayerRef.current.forEach((l: any) => {
-          try { viewer.imageryLayers.remove(l); } catch {}
-        });
-        weatherSatLayerRef.current = null;
-      }
-    };
-  }, [layers.weatherSatellite]);
-
-
-  useEffect(() => {
+    useEffect(() => {
     const viewer = viewerRef.current;
     const ds = dsRefs.current['buildings'];
     if (!viewer || !ds) return;
@@ -1180,80 +1075,5 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     };
   }, [layers.streetTraffic, displayMode]);
 
-  // ========== GLOBAL RADIO STATIONS ==========
-  const radioClickRef = useRef(onRadioStationClick);
-  radioClickRef.current = onRadioStationClick;
-
-  useEffect(() => {
-    const ds = dsRefs.current['radioStations'];
-    const viewer = viewerRef.current;
-    if (!ds || !viewer) return;
-    ds.show = layers.radioStations;
-    ds.entities.removeAll();
-    if (!layers.radioStations || !radioStations || radioStations.length === 0) return;
-
-    try {
-      const ICON_RADIO = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="#a78bfa80" stroke="#a78bfa" stroke-width="1"/><circle cx="6" cy="6" r="1.5" fill="#a78bfa"/></svg>`);
-
-      // Cap at 2000 stations for stability
-      const stationCount = radioStations.length;
-      const capped = stationCount > 2000;
-      if (capped) console.log('[RADIO] Station count capped at 2000 for stability.');
-      const stationsToRender = radioStations.slice(0, 2000);
-
-      for (let i = 0; i < stationsToRender.length; i++) {
-        const s = stationsToRender[i];
-        if (!s.latitude || !s.longitude) continue;
-        ds.entities.add({
-          id: `radio-${s.id}`,
-          position: Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0),
-          billboard: {
-            image: ICON_RADIO, width: 10, height: 10,
-            disableDepthTestDistance: 0,
-            scaleByDistance: new Cesium.NearFarScalar(1e4, 1.5, 5e6, 0.2),
-          },
-          label: {
-            text: s.name, font: '8px Orbitron',
-            fillColor: Cesium.Color.fromCssColorString('#a78bfa'),
-            outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-            pixelOffset: new Cesium.Cartesian2(0, -10),
-            disableDepthTestDistance: 0,
-            scaleByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
-            translucencyByDistance: new Cesium.NearFarScalar(1e4, 1, 2e5, 0),
-          },
-          properties: { entityType: 'radioStation', entityData: JSON.stringify(s) },
-        });
-      }
-    } catch (e) {
-      if (e instanceof RangeError) {
-        console.error('[RADIO] RangeError caught — disabling radio layer:', e.message);
-        ds.entities.removeAll();
-        ds.show = false;
-      } else {
-        console.warn('[RADIO] Radio station rendering error:', e);
-      }
-    }
-
-    // Handle clicks on radio stations
-    const clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    clickHandler.setInputAction((click: any) => {
-      const picked = viewer.scene.pick(click.position);
-      if (Cesium.defined(picked) && picked.id) {
-        try {
-          const entityType = picked.id.properties?.entityType?.getValue();
-          if (entityType === 'radioStation') {
-            const data = JSON.parse(picked.id.properties?.entityData?.getValue());
-            radioClickRef.current(data);
-          }
-        } catch {}
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
-
-    return () => {
-      clickHandler.destroy();
-    };
-  }, [radioStations, layers.radioStations]);
-
-  return <div ref={containerRef} className="w-full h-full" />;
+    return <div ref={containerRef} className="w-full h-full" />;
 }
