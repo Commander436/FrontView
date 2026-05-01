@@ -1,5 +1,4 @@
 export type DisplayMode = 'normal' | 'crt' | 'nvg' | 'flir';
-export type DensityMode = 'sparse' | 'moderate' | 'dense';
 
 export interface Aircraft {
   icao24: string;
@@ -160,8 +159,8 @@ export interface LiveCamera {
 }
 
 export interface SelectedEntity {
-  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout' | 'airspace_closure' | 'live_camera';
-  data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship | InfrastructureItem | GPSInterferenceZone | InternetBlackout | AirspaceClosure | LiveCamera;
+  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout' | 'airspace_closure';
+  data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship | InfrastructureItem | GPSInterferenceZone | InternetBlackout | AirspaceClosure;
 }
 
 export interface LayerVisibility {
@@ -175,7 +174,6 @@ export interface LayerVisibility {
   ports: boolean;
   energy: boolean;
   telecom: boolean;
-  radioStations: boolean;
   bases: boolean;
   buildings: boolean;
   weatherRadar: boolean;
@@ -183,7 +181,5 @@ export interface LayerVisibility {
   gpsInterference: boolean;
   internetBlackouts: boolean;
   airspaceClosures: boolean;
-  liveCameras: boolean;
   scopeOverlay: boolean;
-  weatherSatellite: boolean;
 }
