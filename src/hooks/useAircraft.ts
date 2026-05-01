@@ -68,7 +68,7 @@ export function useAircraft(civilianEnabled: boolean, militaryEnabled: boolean) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
-  const backoffRef = useRef(10000);
+  const backoffRef = useRef(15000);
   const regionIndex = useRef(0);
   const accumulatedRef = useRef<Map<string, Aircraft>>(new Map());
   const logTimer = useRef<ReturnType<typeof setInterval>>();
@@ -118,7 +118,7 @@ export function useAircraft(civilianEnabled: boolean, militaryEnabled: boolean) 
       }
 
       setAircraft(Array.from(accumulatedRef.current.values()));
-      backoffRef.current = 10000;
+      backoffRef.current = 15000;
     } catch (err: any) {
       setError(err.message);
       console.warn('[ACFT] fetch failed:', err.message);

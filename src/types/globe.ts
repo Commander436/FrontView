@@ -143,21 +143,6 @@ export interface AirspaceClosure {
   description: string;
 }
 
-export interface LiveCamera {
-  id: string;
-  name: string;
-  type: 'traffic' | 'city' | 'harbor' | 'weather' | 'scenic';
-  latitude: number;
-  longitude: number;
-  city: string;
-  country: string;
-  provider: string;
-  streamUrl: string;
-  thumbnailUrl?: string;
-  status: 'online' | 'offline';
-  description: string;
-}
-
 export interface SelectedEntity {
   type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout' | 'airspace_closure';
   data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship | InfrastructureItem | GPSInterferenceZone | InternetBlackout | AirspaceClosure;
