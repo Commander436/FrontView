@@ -1,5 +1,5 @@
-import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem, GPSInterferenceZone, InternetBlackout, AirspaceClosure, LiveCamera } from '@/types/globe';
-import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, SignalZero, WifiOff, ShieldAlert, Camera, ExternalLink, Shield, AlertTriangle } from 'lucide-react';
+import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem, GPSInterferenceZone, InternetBlackout, AirspaceClosure } from '@/types/globe';
+import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, SignalZero, WifiOff, ShieldAlert, Shield, AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface DetailPanelProps {
@@ -56,7 +56,6 @@ function getIcon(type: string) {
     case 'gps_interference': return <SignalZero className={cls} />;
     case 'internet_blackout': return <WifiOff className={cls} />;
     case 'airspace_closure': return <ShieldAlert className={cls} />;
-    case 'live_camera': return <Camera className={cls} />;
     default: return null;
   }
 }
@@ -74,7 +73,6 @@ function getTitle(entity: SelectedEntity): string {
     case 'gps_interference': return (d as GPSInterferenceZone).name;
     case 'internet_blackout': return `${(d as InternetBlackout).country} Blackout`;
     case 'airspace_closure': return (d as AirspaceClosure).name;
-    case 'live_camera': return (d as LiveCamera).name;
     default: return 'Unknown';
   }
 }
@@ -287,33 +285,6 @@ function renderDetails(entity: SelectedEntity) {
         </>
       );
     }
-    case 'live_camera': {
-      const cam = d as LiveCamera;
-      return (
-        <>
-          <Badge
-            text={cam.status === 'online' ? '● ONLINE' : '○ OFFLINE'}
-            color={cam.status === 'online' ? 'border-accent/50 text-accent bg-accent/10' : 'border-destructive/50 text-destructive bg-destructive/10'}
-          />
-          <InfoRow label="Type" value={cam.type.toUpperCase()} />
-          <InfoRow label="Location" value={`${cam.city}, ${cam.country}`} />
-          <InfoRow label="Provider" value={cam.provider} />
-          <SectionHeader label="Camera Intel" color="text-emerald-400" />
-          <p className="text-muted-foreground text-[9px] leading-relaxed whitespace-pre-line">{cam.description}</p>
-          {cam.status === 'online' && (
-            <a
-              href={cam.streamUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-[10px] font-display uppercase tracking-wider hover:bg-accent/20 transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" />
-              Open Live Feed
-            </a>
-          )}
-        </>
-      );
-    }
   }
 }
 
@@ -324,7 +295,6 @@ export function DetailPanel({ entity, onClose }: DetailPanelProps) {
     : entity.type === 'gps_interference' ? 'text-orange-400'
     : entity.type === 'internet_blackout' ? 'text-destructive'
     : entity.type === 'airspace_closure' ? 'text-rose-400'
-    : entity.type === 'live_camera' ? 'text-green-400'
     : 'text-foreground';
 
   return (
