@@ -1,15 +1,13 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { LeftPanel } from '@/components/LeftPanel';
 import { RightPanel } from '@/components/RightPanel';
 import { GlobeView } from '@/components/GlobeView';
 import { ScopeOverlay } from '@/components/ScopeOverlay';
-import { RadioPlayer } from '@/components/RadioPlayer';
 import { useGlobeState } from '@/hooks/useGlobeState';
 import { useAircraft } from '@/hooks/useAircraft';
 import { useSatellites } from '@/hooks/useSatellites';
 import { useFIRMS } from '@/hooks/useFIRMS';
 import { useAIS } from '@/hooks/useAIS';
-import { useRadioStations, RadioStation } from '@/hooks/useRadioStations';
 import { Search } from 'lucide-react';
 import { DisplayMode } from '@/types/globe';
 
@@ -37,7 +35,6 @@ const Index = () => {
     layers, toggleLayer,
     selectedEntity, selectEntity,
     displayMode, setDisplayMode,
-    density, setDensity,
   } = useGlobeState();
 
   // Aircraft enabled if EITHER civilian or military toggle is on
@@ -45,12 +42,10 @@ const Index = () => {
   const { satellites } = useSatellites(layers.satellites);
   const { anomalies: thermalAnomalies } = useFIRMS(layers.conflicts);
   const { ships: liveShips } = useAIS(layers.ships);
-  const { stations: radioStations } = useRadioStations(layers.radioStations);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
-  const [activeRadioStation, setActiveRadioStation] = useState<RadioStation | null>(null);
 
   // Camera coordinate tracking
   useEffect(() => {
@@ -126,10 +121,6 @@ const Index = () => {
     }
   };
 
-  const handleRadioStationSelect = (station: RadioStation) => {
-    setActiveRadioStation(station);
-  };
-
   const globeFilter = useMemo(() => {
     switch (displayMode) {
       case 'crt': return 'sepia(1) hue-rotate(80deg) saturate(2) brightness(0.7) contrast(1.3)';
@@ -149,8 +140,6 @@ const Index = () => {
         onToggleLayer={toggleLayer}
         displayMode={displayMode}
         onSetDisplayMode={setDisplayMode}
-        density={density}
-        onSetDensity={setDensity}
         aircraftCount={aircraft.length}
         satelliteCount={satellites.length}
         shipCount={liveShips.length}
@@ -165,12 +154,9 @@ const Index = () => {
             satellites={satellites}
             thermalAnomalies={thermalAnomalies}
             liveShips={liveShips}
-            radioStations={radioStations}
-            density={density}
             displayMode={displayMode}
             selectedEntity={selectedEntity}
             onEntitySelect={selectEntity}
-            onRadioStationClick={handleRadioStationSelect}
           />
         </div>
         {showScope && <ScopeOverlay mode={displayMode === 'normal' ? 'scope-only' : displayMode} />}
@@ -216,10 +202,6 @@ const Index = () => {
           <div className="opacity-60">MGRS {toMGRS(cameraCoords.lat, cameraCoords.lon)}</div>
         </div>
 
-        {/* Radio player */}
-        {activeRadioStation && (
-          <RadioPlayer station={activeRadioStation} onClose={() => setActiveRadioStation(null)} />
-        )}
       </main>
       <RightPanel
         selectedEntity={selectedEntity}

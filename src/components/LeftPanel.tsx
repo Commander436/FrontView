@@ -1,11 +1,11 @@
-import { LayerVisibility, DisplayMode, DensityMode } from '@/types/globe';
+import { LayerVisibility, DisplayMode } from '@/types/globe';
 import {
   Shield, Clock, Plane, Anchor, Satellite,
   Swords, MapPin, Eye, CloudRain, Crosshair,
-  ChevronLeft, ChevronRight, Car, Building, Layers,
+  ChevronLeft, ChevronRight, Car, Building,
   Zap, Radio, Ship, Factory, ChevronDown,
   Navigation, Globe, Box, BarChart3,
-  WifiOff, SignalZero, Camera, ShieldAlert,
+  WifiOff, SignalZero, ShieldAlert,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -14,8 +14,6 @@ interface LeftPanelProps {
   onToggleLayer: (layer: keyof LayerVisibility) => void;
   displayMode: DisplayMode;
   onSetDisplayMode: (mode: DisplayMode) => void;
-  density: DensityMode;
-  onSetDensity: (d: DensityMode) => void;
   aircraftCount: number;
   satelliteCount: number;
   shipCount: number;
@@ -43,7 +41,6 @@ const INFRA_TOGGLES: ToggleItem[] = [
   { key: 'ports', label: 'PORTS', icon: Ship },
   { key: 'energy', label: 'ENERGY & PIPELINES', icon: Zap },
   { key: 'telecom', label: 'TELECOM & CABLES', icon: Radio },
-  { key: 'radioStations', label: 'GLOBAL RADIO STATIONS', icon: Radio },
   { key: 'bases', label: 'MILITARY BASES', icon: Shield },
 ];
 
@@ -53,12 +50,10 @@ const EXTRAS_TOGGLES: ToggleItem[] = [
 
 const DATA_LAYER_TOGGLES: ToggleItem[] = [
   { key: 'weatherRadar', label: 'WEATHER RADAR', icon: CloudRain },
-  { key: 'weatherSatellite', label: 'SAT IMAGERY (GOES/VIIRS)', icon: Globe },
   { key: 'conflicts', label: 'CONFLICTS', icon: Swords },
   { key: 'gpsInterference', label: 'GPS INTERFERENCE', icon: SignalZero },
   { key: 'internetBlackouts', label: 'INTERNET BLACKOUTS', icon: WifiOff },
   { key: 'airspaceClosures', label: 'AIRSPACE CLOSURES', icon: ShieldAlert },
-  { key: 'liveCameras', label: 'LIVE CAMERAS', icon: Camera },
 ];
 
 function ToggleButton({ item, active, onToggle, count }: {
@@ -135,7 +130,6 @@ function Category({ title, icon: Icon, items, layers, onToggle, getCount, defaul
 
 export function LeftPanel({
   layers, onToggleLayer, displayMode, onSetDisplayMode,
-  density, onSetDensity,
   aircraftCount, satelliteCount, shipCount, collapsed, onToggleCollapse,
 }: LeftPanelProps) {
   const [time, setTime] = useState(new Date());
@@ -186,23 +180,6 @@ export function LeftPanel({
                 {utc}Z
               </span>
             </div>
-          </div>
-
-          {/* Density */}
-          <div className="rounded-2xl border border-foreground/8 glass-panel bg-card/30 p-3 space-y-2">
-            <div className="text-[9px] font-display uppercase tracking-[0.18em] text-muted-foreground flex items-center gap-1.5">
-              <Layers className="w-3 h-3 text-foreground/60" />
-              DENSITY
-            </div>
-            <select
-              value={density}
-              onChange={e => onSetDensity(e.target.value as DensityMode)}
-              className="w-full bg-secondary/40 glass-panel border border-foreground/10 rounded-xl px-3 py-2 text-[10px] font-display tracking-wider text-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30 cursor-pointer transition-all"
-            >
-              <option value="sparse">SPARSE (25%)</option>
-              <option value="moderate">MODERATE (50%)</option>
-              <option value="dense">DENSE (100%)</option>
-            </select>
           </div>
 
           {/* Categories */}
