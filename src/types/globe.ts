@@ -144,8 +144,8 @@ export interface AirspaceClosure {
 }
 
 export interface SelectedEntity {
-  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout' | 'airspace_closure';
-  data: Aircraft | SatelliteData | City | MilitaryBase | ConflictZone | Ship | InfrastructureItem | GPSInterferenceZone | InternetBlackout | AirspaceClosure;
+  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout' | 'airspace_closure' | 'annotation';
+  data: any;
 }
 
 export interface LayerVisibility {
