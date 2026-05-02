@@ -102,9 +102,12 @@ interface GlobeViewProps {
   displayMode: DisplayMode;
   selectedEntity: { type: string; data: any } | null;
   onEntitySelect: (entity: any) => void;
+  annotations?: any[];
+  drawingTool?: 'point' | 'line' | 'square' | 'circle' | null;
+  onDrawComplete?: (kind: string, payload: any) => void;
 }
 
-export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, displayMode, selectedEntity, onEntitySelect }: GlobeViewProps) {
+export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, liveShips, displayMode, selectedEntity, onEntitySelect, annotations = [], drawingTool = null, onDrawComplete }: GlobeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedEntityRef = useRef(selectedEntity);
   selectedEntityRef.current = selectedEntity;
