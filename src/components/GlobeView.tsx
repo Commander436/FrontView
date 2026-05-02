@@ -1079,5 +1079,109 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     };
   }, [layers.streetTraffic, displayMode]);
 
+  // ========== ANNOTATIONS (render + draw) ==========
+  const annotationsRef = useRef(annotations);
+  annotationsRef.current = annotations;
+  const drawingToolRef = useRef(drawingTool);
+  drawingToolRef.current = drawingTool;
+  const onDrawCompleteRef = useRef(onDrawComplete);
+  onDrawCompleteRef.current = onDrawComplete;
+  const drawStateRef = useRef<{ first?: { lon: number; lat: number }; preview?: any }>({});
+
+  // Render annotations
+  useEffect(() => {
+    const ds = dsRefs.current['annotations'];
+    if (!ds) return;
+    ds.entities.removeAll();
+    const COLORS: Record<string, string> = {
+      white: '#ffffff', red: '#ff3b3b', yellow: '#ffd400',
+      cyan: '#22d3ee', orange: '#ff8c00', green: '#34d399',
+    };
+    annotations.forEach(a => {
+      const c = Cesium.Color.fromCssColorString(COLORS[a.color] || '#ffffff');
+      const props = { entityType: 'annotation', entityData: JSON.stringify(a) };
+      if (a.kind === 'point') {
+        ds.entities.add({
+          id: `ann-${a.id}`,
+          position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat, 0),
+          point: { pixelSize: 8, color: c, outlineColor: Cesium.Color.BLACK, outlineWidth: 1, disableDepthTestDistance: 0 },
+          label: { text: a.title, font: '10px Orbitron', fillColor: c, outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -14), disableDepthTestDistance: 0 },
+          properties: props,
+        });
+      } else if (a.kind === 'line') {
+        ds.entities.add({
+          id: `ann-${a.id}`,
+          polyline: { positions: Cesium.Cartesian3.fromDegreesArray([a.start.lon, a.start.lat, a.end.lon, a.end.lat]),
+            width: 1.8, material: c, arcType: Cesium.ArcType.GEODESIC, clampToGround: false },
+          properties: props,
+        });
+      } else if (a.kind === 'square') {
+        const minLat = Math.min(a.cornerA.lat, a.cornerB.lat);
+        const maxLat = Math.max(a.cornerA.lat, a.cornerB.lat);
+        const minLon = Math.min(a.cornerA.lon, a.cornerB.lon);
+        const maxLon = Math.max(a.cornerA.lon, a.cornerB.lon);
+        const ring = [minLon, minLat, maxLon, minLat, maxLon, maxLat, minLon, maxLat, minLon, minLat];
+        ds.entities.add({
+          id: `ann-${a.id}`,
+          polyline: { positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 1.8, material: c, clampToGround: true },
+          properties: props,
+        });
+      } else if (a.kind === 'circle') {
+        ds.entities.add({
+          id: `ann-${a.id}`,
+          position: Cesium.Cartesian3.fromDegrees(a.center.lon, a.center.lat, 0),
+          ellipse: { semiMajorAxis: a.radiusMeters, semiMinorAxis: a.radiusMeters,
+            material: Cesium.Color.TRANSPARENT, outline: true, outlineColor: c, outlineWidth: 2, height: 0 },
+          properties: props,
+        });
+      }
+    });
+  }, [annotations]);
+
+  // Drawing handlers
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    const pickLonLat = (pos: any): { lon: number; lat: number } | null => {
+      const cart = viewer.camera.pickEllipsoid(pos, viewer.scene.globe.ellipsoid);
+      if (!cart) return null;
+      const c = Cesium.Cartographic.fromCartesian(cart);
+      return { lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) };
+    };
+
+    handler.setInputAction((click: any) => {
+      const tool = drawingToolRef.current;
+      if (!tool) return;
+      const ll = pickLonLat(click.position);
+      if (!ll) return;
+      if (tool === 'point') {
+        onDrawCompleteRef.current?.('point', ll);
+      } else if (tool === 'line' || tool === 'square') {
+        if (!drawStateRef.current.first) {
+          drawStateRef.current.first = ll;
+        } else {
+          onDrawCompleteRef.current?.(tool, { a: drawStateRef.current.first, b: ll });
+          drawStateRef.current.first = undefined;
+        }
+      } else if (tool === 'circle') {
+        if (!drawStateRef.current.first) {
+          drawStateRef.current.first = ll;
+        } else {
+          const R = 6371000, toRad = (d: number) => d * Math.PI / 180;
+          const a = drawStateRef.current.first;
+          const dLat = toRad(ll.lat - a.lat), dLon = toRad(ll.lon - a.lon);
+          const sa = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(ll.lat)) * Math.sin(dLon / 2) ** 2;
+          const radius = 2 * R * Math.asin(Math.sqrt(sa));
+          onDrawCompleteRef.current?.('circle', { center: a, radiusMeters: radius });
+          drawStateRef.current.first = undefined;
+        }
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    return () => { handler.destroy(); drawStateRef.current = {}; };
+  }, [drawingTool]);
+
     return <div ref={containerRef} className="w-full h-full" />;
 }
