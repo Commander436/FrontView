@@ -1,10 +1,14 @@
 import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem, GPSInterferenceZone, InternetBlackout, AirspaceClosure } from '@/types/globe';
 import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, SignalZero, WifiOff, ShieldAlert, Shield, AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { AnnotationDetail } from './AnnotationDetail';
+import { Annotation, AnnotationColor } from '@/types/annotations';
 
 interface DetailPanelProps {
   entity: SelectedEntity;
   onClose: () => void;
+  onAnnotationColor?: (id: string, color: AnnotationColor) => void;
+  onAnnotationDelete?: (id: string) => void;
 }
 
 function InfoRow({ label, value, highlight }: { label: string; value: string | number | undefined; highlight?: boolean }) {
@@ -288,7 +292,18 @@ function renderDetails(entity: SelectedEntity) {
   }
 }
 
-export function DetailPanel({ entity, onClose }: DetailPanelProps) {
+export function DetailPanel({ entity, onClose, onAnnotationColor, onAnnotationDelete }: DetailPanelProps) {
+  // Annotations have their own dedicated layout (no shared header).
+  if (entity.type === 'annotation') {
+    return (
+      <AnnotationDetail
+        annotation={entity.data as Annotation}
+        onChangeColor={(id, c) => onAnnotationColor?.(id, c)}
+        onDelete={(id) => onAnnotationDelete?.(id)}
+      />
+    );
+  }
+
   const severityColor =
     entity.type === 'conflict' ? ((entity.data as ConflictZone).severity === 'high' ? 'text-destructive' : 'text-yellow-400')
     : entity.type === 'aircraft' && (entity.data as Aircraft).isMilitary ? 'text-orange-400'
