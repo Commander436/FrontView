@@ -145,6 +145,9 @@ const Index = () => {
         shipCount={liveShips.length}
         collapsed={leftCollapsed}
         onToggleCollapse={() => setLeftCollapsed(!leftCollapsed)}
+        drawingTool={null}
+        onSetDrawingTool={() => {}}
+        annotationCount={0}
       />
       <main className="flex-1 relative min-w-0">
         <div className="w-full h-full" style={{ filter: globeFilter }}>
