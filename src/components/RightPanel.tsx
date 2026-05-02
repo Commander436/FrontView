@@ -1,13 +1,16 @@
 import { SelectedEntity } from '@/types/globe';
 import { DetailPanel } from './DetailPanel';
 import { X } from 'lucide-react';
+import { AnnotationColor } from '@/types/annotations';
 
 interface RightPanelProps {
   selectedEntity: SelectedEntity | null;
   onClose: () => void;
+  onAnnotationColor?: (id: string, color: AnnotationColor) => void;
+  onAnnotationDelete?: (id: string) => void;
 }
 
-export function RightPanel({ selectedEntity, onClose }: RightPanelProps) {
+export function RightPanel({ selectedEntity, onClose, onAnnotationColor, onAnnotationDelete }: RightPanelProps) {
   if (!selectedEntity) return null;
 
   return (
@@ -25,7 +28,12 @@ export function RightPanel({ selectedEntity, onClose }: RightPanelProps) {
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-4">
-        <DetailPanel entity={selectedEntity} onClose={onClose} />
+        <DetailPanel
+          entity={selectedEntity}
+          onClose={onClose}
+          onAnnotationColor={onAnnotationColor}
+          onAnnotationDelete={onAnnotationDelete}
+        />
       </div>
       {/* Footer status */}
       <div className="px-4 py-2 border-t border-foreground/8">

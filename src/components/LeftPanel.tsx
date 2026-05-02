@@ -6,8 +6,10 @@ import {
   Zap, Radio, Ship, Factory, ChevronDown,
   Navigation, Globe, Box, BarChart3,
   WifiOff, SignalZero, ShieldAlert,
+  Pencil, Minus, Square, Circle,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { DrawingTool } from '@/types/annotations';
 
 interface LeftPanelProps {
   layers: LayerVisibility;
@@ -19,6 +21,9 @@ interface LeftPanelProps {
   shipCount: number;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  drawingTool: DrawingTool;
+  onSetDrawingTool: (tool: DrawingTool) => void;
+  annotationCount: number;
 }
 
 interface ToggleItem {
@@ -131,6 +136,7 @@ function Category({ title, icon: Icon, items, layers, onToggle, getCount, defaul
 export function LeftPanel({
   layers, onToggleLayer, displayMode, onSetDisplayMode,
   aircraftCount, satelliteCount, shipCount, collapsed, onToggleCollapse,
+  drawingTool, onSetDrawingTool, annotationCount,
 }: LeftPanelProps) {
   const [time, setTime] = useState(new Date());
 
@@ -187,6 +193,49 @@ export function LeftPanel({
           <Category title="Infrastructure" icon={Factory} items={INFRA_TOGGLES} layers={layers} onToggle={onToggleLayer} />
           <Category title="Extras" icon={Box} items={EXTRAS_TOGGLES} layers={layers} onToggle={onToggleLayer} />
           <Category title="Threat Intelligence" icon={BarChart3} items={DATA_LAYER_TOGGLES} layers={layers} onToggle={onToggleLayer} />
+
+          {/* Lines & Shapes — annotation drawing tools */}
+          <div className="rounded-2xl border border-foreground/8 overflow-hidden glass-panel bg-card/30">
+            <div className="px-4 py-3 flex items-center gap-2.5 text-[9px] font-display uppercase tracking-[0.18em] text-muted-foreground">
+              <Pencil className="w-3.5 h-3.5 text-foreground/60" />
+              <span className="flex-1">Lines &amp; Shapes</span>
+              {annotationCount > 0 && (
+                <span className="text-[8px] font-mono text-foreground bg-foreground/10 px-1.5 py-0.5 rounded-full">{annotationCount}</span>
+              )}
+            </div>
+            <div className="px-2 pb-2 grid grid-cols-2 gap-1">
+              {([
+                { tool: 'point' as const,  label: 'POINT',  Icon: MapPin },
+                { tool: 'line' as const,   label: 'LINE',   Icon: Minus },
+                { tool: 'square' as const, label: 'SQUARE', Icon: Square },
+                { tool: 'circle' as const, label: 'CIRCLE', Icon: Circle },
+              ]).map(({ tool, label, Icon }) => {
+                const active = drawingTool === tool;
+                return (
+                  <button
+                    key={tool}
+                    onClick={() => onSetDrawingTool(active ? null : tool)}
+                    className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs transition-all duration-200 ${
+                      active
+                        ? 'bg-foreground/15 border border-foreground/30 text-foreground shadow-[0_0_8px_hsl(0_0%_100%/0.15)]'
+                        : 'text-muted-foreground border border-transparent hover:bg-secondary/40 hover:text-foreground/80'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span className="font-display tracking-[0.12em] text-[8px]">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {drawingTool && (
+              <div className="px-3 pb-3 text-[9px] font-mono text-foreground/60 border-t border-foreground/8 pt-2">
+                {drawingTool === 'point' && '· Click on globe to place point'}
+                {drawingTool === 'line' && '· Click start, then click end'}
+                {drawingTool === 'square' && '· Click two opposite corners'}
+                {drawingTool === 'circle' && '· Click center, drag to set radius'}
+              </div>
+            )}
+          </div>
 
           {/* System Status */}
           <div className="mt-auto pt-3 border-t border-foreground/8">

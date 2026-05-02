@@ -8,6 +8,8 @@ import { useAircraft } from '@/hooks/useAircraft';
 import { useSatellites } from '@/hooks/useSatellites';
 import { useFIRMS } from '@/hooks/useFIRMS';
 import { useAIS } from '@/hooks/useAIS';
+import { useAnnotations } from '@/hooks/useAnnotations';
+import { PointAnnotationModal } from '@/components/PointAnnotationModal';
 import { Search } from 'lucide-react';
 import { DisplayMode } from '@/types/globe';
 
@@ -42,6 +44,12 @@ const Index = () => {
   const { satellites } = useSatellites(layers.satellites);
   const { anomalies: thermalAnomalies } = useFIRMS(layers.conflicts);
   const { ships: liveShips } = useAIS(layers.ships);
+  const {
+    annotations, drawingTool, setDrawingTool,
+    pendingPoint, setPendingPoint,
+    addPoint, addLine, addSquare, addCircle,
+    updateColor, remove,
+  } = useAnnotations(aircraft);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
   const [searchQuery, setSearchQuery] = useState('');
@@ -121,6 +129,24 @@ const Index = () => {
     }
   };
 
+  const handleDrawComplete = (kind: string, payload: any) => {
+    if (kind === 'point') {
+      setPendingPoint(payload);
+    } else if (kind === 'line') {
+      const ann = addLine(payload.a, payload.b);
+      selectEntity({ type: 'annotation' as any, data: ann });
+      setDrawingTool(null);
+    } else if (kind === 'square') {
+      const ann = addSquare(payload.a, payload.b);
+      selectEntity({ type: 'annotation' as any, data: ann });
+      setDrawingTool(null);
+    } else if (kind === 'circle') {
+      const ann = addCircle(payload.center, payload.radiusMeters);
+      selectEntity({ type: 'annotation' as any, data: ann });
+      setDrawingTool(null);
+    }
+  };
+
   const globeFilter = useMemo(() => {
     switch (displayMode) {
       case 'crt': return 'sepia(1) hue-rotate(80deg) saturate(2) brightness(0.7) contrast(1.3)';
@@ -145,6 +171,9 @@ const Index = () => {
         shipCount={liveShips.length}
         collapsed={leftCollapsed}
         onToggleCollapse={() => setLeftCollapsed(!leftCollapsed)}
+        drawingTool={drawingTool}
+        onSetDrawingTool={setDrawingTool}
+        annotationCount={annotations.length}
       />
       <main className="flex-1 relative min-w-0">
         <div className="w-full h-full" style={{ filter: globeFilter }}>
@@ -157,6 +186,9 @@ const Index = () => {
             displayMode={displayMode}
             selectedEntity={selectedEntity}
             onEntitySelect={selectEntity}
+            annotations={annotations}
+            drawingTool={drawingTool}
+            onDrawComplete={handleDrawComplete}
           />
         </div>
         {showScope && <ScopeOverlay mode={displayMode === 'normal' ? 'scope-only' : displayMode} />}
@@ -202,10 +234,25 @@ const Index = () => {
           <div className="opacity-60">MGRS {toMGRS(cameraCoords.lat, cameraCoords.lon)}</div>
         </div>
 
+        {pendingPoint && (
+          <PointAnnotationModal
+            lon={pendingPoint.lon}
+            lat={pendingPoint.lat}
+            onSave={(title, description) => {
+              const ann = addPoint(pendingPoint.lon, pendingPoint.lat, title, description);
+              setPendingPoint(null);
+              setDrawingTool(null);
+              selectEntity({ type: 'annotation' as any, data: ann });
+            }}
+            onCancel={() => setPendingPoint(null)}
+          />
+        )}
       </main>
       <RightPanel
         selectedEntity={selectedEntity}
         onClose={() => selectEntity(null)}
+        onAnnotationColor={updateColor}
+        onAnnotationDelete={(id) => { remove(id); selectEntity(null); }}
       />
     </div>
   );
