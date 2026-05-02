@@ -168,6 +168,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     viewer.camera.percentageChanged = 0.05;
 
     const layerNames = ['aircraft', 'aircraftTrails', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'thermalAnomalies', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts', 'airspaceClosures', 'oilPipelines', 'subseaCables'];
+    layerNames.push('annotations');
     layerNames.forEach(name => {
       const ds = new Cesium.CustomDataSource(name);
       viewer.dataSources.add(ds);
