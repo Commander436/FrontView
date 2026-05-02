@@ -6,8 +6,10 @@ import {
   Zap, Radio, Ship, Factory, ChevronDown,
   Navigation, Globe, Box, BarChart3,
   WifiOff, SignalZero, ShieldAlert,
+  Pencil, Minus, Square, Circle,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { DrawingTool } from '@/types/annotations';
 
 interface LeftPanelProps {
   layers: LayerVisibility;
@@ -19,6 +21,9 @@ interface LeftPanelProps {
   shipCount: number;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  drawingTool: DrawingTool;
+  onSetDrawingTool: (tool: DrawingTool) => void;
+  annotationCount: number;
 }
 
 interface ToggleItem {
@@ -131,6 +136,7 @@ function Category({ title, icon: Icon, items, layers, onToggle, getCount, defaul
 export function LeftPanel({
   layers, onToggleLayer, displayMode, onSetDisplayMode,
   aircraftCount, satelliteCount, shipCount, collapsed, onToggleCollapse,
+  drawingTool, onSetDrawingTool, annotationCount,
 }: LeftPanelProps) {
   const [time, setTime] = useState(new Date());
 
