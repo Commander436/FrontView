@@ -2,19 +2,27 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Aircraft } from '@/types/globe';
 import { classifyAircraft } from '@/utils/militaryClassification';
 
-// airplanes.live — free, no key, CORS-enabled, ADSBexchange-compatible readsb format
-const REGIONS = [
-  { name: 'North America', lat: 40, lon: -100, dist: 500 },
-  { name: 'Europe', lat: 48, lon: 10, dist: 500 },
-  { name: 'East Asia', lat: 35, lon: 105, dist: 500 },
-  { name: 'Middle East', lat: 25, lon: 55, dist: 400 },
-  { name: 'South Asia', lat: 20, lon: 78, dist: 400 },
-  { name: 'Southeast Asia', lat: 15, lon: 120, dist: 400 },
-  { name: 'Africa', lat: 5, lon: 25, dist: 400 },
-  { name: 'South America', lat: -10, lon: -50, dist: 400 },
-  { name: 'Australia', lat: -25, lon: 135, dist: 400 },
-  { name: 'Russia', lat: 60, lon: 80, dist: 500 },
+// airplanes.live — free, no key, CORS-enabled, ADSBexchange-compatible readsb format.
+// NOTE: airplanes.live exposes NO single global JSON endpoint and NO WebSocket
+// (verified against api docs at https://airplanes.live/api-guide/). The only way
+// to obtain global civilian coverage is to fan out point queries that together
+// blanket the planet. /v2/point caps radius at 250nm — anything larger is
+// silently truncated, so we use 250 and overlap a 12-cell coverage map.
+const COVERAGE_POINTS: Array<{ name: string; lat: number; lon: number }> = [
+  { name: 'N.America-W',   lat:  40, lon: -120 },
+  { name: 'N.America-E',   lat:  40, lon:  -80 },
+  { name: 'Europe',        lat:  48, lon:   10 },
+  { name: 'E.Asia',        lat:  35, lon:  120 },
+  { name: 'C.Asia',        lat:  40, lon:   70 },
+  { name: 'S.Asia',        lat:  20, lon:   78 },
+  { name: 'SE.Asia',       lat:   5, lon:  110 },
+  { name: 'M.East',        lat:  25, lon:   50 },
+  { name: 'Africa',        lat:   0, lon:   25 },
+  { name: 'S.America',     lat: -15, lon:  -60 },
+  { name: 'Australia',     lat: -25, lon:  135 },
+  { name: 'N.Atlantic',    lat:  45, lon:  -30 },
 ];
+const POINT_RADIUS_NM = 250; // hard API cap
 
 function parseAircraft(raw: any[]): Aircraft[] {
   return raw
@@ -68,61 +76,58 @@ export function useAircraft(civilianEnabled: boolean, militaryEnabled: boolean) 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
-  const backoffRef = useRef(15000);
-  const regionIndex = useRef(0);
   const accumulatedRef = useRef<Map<string, Aircraft>>(new Map());
   const logTimer = useRef<ReturnType<typeof setInterval>>();
 
   // Aircraft should be fetched if EITHER civilian or military toggle is on
   const enabled = civilianEnabled || militaryEnabled;
 
-  const fetchRegionBatch = useCallback(async () => {
+  // Single global fetch — no rotation, no per-cycle region selection.
+  // Fans out across the full coverage map in parallel each cycle.
+  const fetchGlobalAirplanes = useCallback(async () => {
     if (!enabled) return;
+    setLoading(true);
+    setError(null);
+
+    const requests = COVERAGE_POINTS.map(p =>
+      fetch(`https://api.airplanes.live/v2/point/${p.lat}/${p.lon}/${POINT_RADIUS_NM}`)
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          return data.ac || [];
+        })
+        .catch((err) => {
+          console.warn(`[AIRPLANES.LIVE] ${p.name} failed:`, err.message);
+          return [];
+        })
+    );
+    // Also pull dedicated military feed (covers MIL outside any point radius)
+    requests.push(
+      fetch('https://api.airplanes.live/v2/mil')
+        .then(async (res) => res.ok ? (await res.json()).ac || [] : [])
+        .catch(() => [])
+    );
+
     try {
-      setLoading(true);
-      setError(null);
+      const batches = await Promise.all(requests);
+      const merged = batches.flat();
+      console.log('[AIRPLANES.LIVE] raw aircraft fetched:', merged.length);
 
-      const batch = [];
-      for (let i = 0; i < 2; i++) {
-        const region = REGIONS[(regionIndex.current + i) % REGIONS.length];
-        batch.push(
-          fetch(`https://api.airplanes.live/v2/point/${region.lat}/${region.lon}/${region.dist}`)
-            .then(async (res) => {
-              if (!res.ok) throw new Error(`HTTP ${res.status}`);
-              const data = await res.json();
-              return { region: region.name, ac: data.ac || [] };
-            })
-            .catch((err) => {
-              console.warn(`[ACFT] ${region.name} fetch failed:`, err.message);
-              return { region: region.name, ac: [] };
-            })
-        );
-      }
-      regionIndex.current = (regionIndex.current + 2) % REGIONS.length;
-
-      const results = await Promise.all(batch);
-
-      // Merge into accumulated map — NEVER clear
-      for (const result of results) {
-        const parsed = parseAircraft(result.ac);
-        for (const a of parsed) {
-          accumulatedRef.current.set(a.icao24, a);
-        }
+      const parsed = parseAircraft(merged);
+      // Merge into accumulated map — NEVER clear (incremental update policy)
+      for (const a of parsed) {
+        accumulatedRef.current.set(a.icao24, a);
       }
 
       // Remove stale entries (lastContact > 5 minutes = 300 seconds)
       for (const [id, a] of accumulatedRef.current) {
-        if (a.lastContact > 300) {
-          accumulatedRef.current.delete(id);
-        }
+        if (a.lastContact > 300) accumulatedRef.current.delete(id);
       }
 
       setAircraft(Array.from(accumulatedRef.current.values()));
-      backoffRef.current = 15000;
     } catch (err: any) {
       setError(err.message);
-      console.warn('[ACFT] fetch failed:', err.message);
-      backoffRef.current = Math.min(backoffRef.current * 1.5, 60000);
+      console.warn('[AIRPLANES.LIVE] global fetch failed:', err.message);
     } finally {
       setLoading(false);
     }
@@ -153,13 +158,13 @@ export function useAircraft(civilianEnabled: boolean, militaryEnabled: boolean) 
       return;
     }
 
-    fetchRegionBatch();
-    intervalRef.current = setInterval(fetchRegionBatch, backoffRef.current);
+    fetchGlobalAirplanes();
+    intervalRef.current = setInterval(fetchGlobalAirplanes, 15000);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [enabled, fetchRegionBatch]);
+  }, [enabled, fetchGlobalAirplanes]);
 
   return { aircraft, loading, error };
 }
