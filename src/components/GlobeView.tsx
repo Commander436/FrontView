@@ -302,7 +302,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
             width: isMil ? 22 : 16, height: isMil ? 22 : 16,
             rotation: Cesium.Math.toRadians(-(a.heading || 0)),
             alignedAxis: Cesium.Cartesian3.UNIT_Z,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            disableDepthTestDistance: 0,
             scaleByDistance: new Cesium.NearFarScalar(1e5, 1.8, 2e7, 0.4),
             show: shouldShow,
           },
