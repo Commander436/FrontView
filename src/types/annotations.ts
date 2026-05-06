@@ -12,11 +12,29 @@ export const ANNOTATION_COLOR_HEX: Record<AnnotationColor, string> = {
 export type AnnotationKind = 'point' | 'line' | 'square' | 'circle';
 export type DrawingTool = AnnotationKind | null;
 
+export type LineStyle = 'solid' | 'dashed' | 'dotted' | 'arrow';
+
+export type PointIcon =
+  | 'dot' | 'plane' | 'helicopter' | 'ship'
+  | 'tank' | 'infantry' | 'radar' | 'building';
+
+export const POINT_ICON_OPTIONS: { id: PointIcon; label: string }[] = [
+  { id: 'dot',        label: 'Dot' },
+  { id: 'plane',      label: 'Plane' },
+  { id: 'helicopter', label: 'Helicopter' },
+  { id: 'ship',       label: 'Ship' },
+  { id: 'tank',       label: 'Tank' },
+  { id: 'infantry',   label: 'Infantry' },
+  { id: 'radar',      label: 'Radar' },
+  { id: 'building',   label: 'Building' },
+];
+
 interface AnnotationBase {
   id: string;
   kind: AnnotationKind;
   color: AnnotationColor;
   createdAt: number;
+  title?: string;
 }
 
 export interface PointAnnotation extends AnnotationBase {
@@ -25,6 +43,7 @@ export interface PointAnnotation extends AnnotationBase {
   description: string;
   lon: number;
   lat: number;
+  icon?: PointIcon;
 }
 
 export interface LineAnnotation extends AnnotationBase {
@@ -36,6 +55,7 @@ export interface LineAnnotation extends AnnotationBase {
   crossedTotal: number;
   crossedCivilian: number;
   crossedMilitary: number;
+  style?: LineStyle;
 }
 
 export interface SquareAnnotation extends AnnotationBase {
@@ -48,6 +68,7 @@ export interface SquareAnnotation extends AnnotationBase {
   exitedTotal: number;
   civilianInside: number;
   militaryInside: number;
+  style?: LineStyle; // solid|dashed|dotted (arrow ignored)
 }
 
 export interface CircleAnnotation extends AnnotationBase {
@@ -59,6 +80,7 @@ export interface CircleAnnotation extends AnnotationBase {
   exitedTotal: number;
   civilianInside: number;
   militaryInside: number;
+  style?: LineStyle;
 }
 
 export type Annotation =
