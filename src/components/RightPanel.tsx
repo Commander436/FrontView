@@ -1,16 +1,19 @@
 import { SelectedEntity } from '@/types/globe';
 import { DetailPanel } from './DetailPanel';
 import { X } from 'lucide-react';
-import { AnnotationColor } from '@/types/annotations';
+import { AnnotationColor, LineStyle, PointIcon } from '@/types/annotations';
 
 interface RightPanelProps {
   selectedEntity: SelectedEntity | null;
   onClose: () => void;
   onAnnotationColor?: (id: string, color: AnnotationColor) => void;
+  onAnnotationRename?: (id: string, title: string) => void;
+  onAnnotationStyle?: (id: string, style: LineStyle) => void;
+  onAnnotationIcon?: (id: string, icon: PointIcon) => void;
   onAnnotationDelete?: (id: string) => void;
 }
 
-export function RightPanel({ selectedEntity, onClose, onAnnotationColor, onAnnotationDelete }: RightPanelProps) {
+export function RightPanel({ selectedEntity, onClose, onAnnotationColor, onAnnotationRename, onAnnotationStyle, onAnnotationIcon, onAnnotationDelete }: RightPanelProps) {
   if (!selectedEntity) return null;
 
   return (
@@ -32,6 +35,9 @@ export function RightPanel({ selectedEntity, onClose, onAnnotationColor, onAnnot
           entity={selectedEntity}
           onClose={onClose}
           onAnnotationColor={onAnnotationColor}
+          onAnnotationRename={onAnnotationRename}
+          onAnnotationStyle={onAnnotationStyle}
+          onAnnotationIcon={onAnnotationIcon}
           onAnnotationDelete={onAnnotationDelete}
         />
       </div>

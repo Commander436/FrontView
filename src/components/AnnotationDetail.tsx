@@ -1,13 +1,18 @@
-import { Annotation, AnnotationColor, ANNOTATION_COLOR_HEX } from '@/types/annotations';
-import { MapPin, Minus, Square, Circle, Trash2, Palette } from 'lucide-react';
+import { Annotation, AnnotationColor, ANNOTATION_COLOR_HEX, LineStyle, PointIcon, POINT_ICON_OPTIONS } from '@/types/annotations';
+import { MapPin, Minus, Square, Circle, Trash2, Palette, Pencil, Check } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 interface AnnotationDetailProps {
   annotation: Annotation;
   onChangeColor: (id: string, color: AnnotationColor) => void;
+  onRename: (id: string, title: string) => void;
+  onChangeStyle: (id: string, style: LineStyle) => void;
+  onChangeIcon: (id: string, icon: PointIcon) => void;
   onDelete: (id: string) => void;
 }
 
 const COLORS: AnnotationColor[] = ['white', 'red', 'yellow', 'cyan', 'orange', 'green'];
+const STYLES: LineStyle[] = ['solid', 'dashed', 'dotted', 'arrow'];
 
 function Row({ label, value }: { label: string; value: string | number }) {
   return (
@@ -18,30 +23,55 @@ function Row({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function Title({ kind }: { kind: Annotation['kind'] }) {
+function TitleBar({ annotation, onRename }: { annotation: Annotation; onRename: (id: string, t: string) => void }) {
   const map = {
     point:  { icon: <MapPin className="w-4 h-4" />,  label: 'POINT OF INTEREST' },
     line:   { icon: <Minus className="w-4 h-4" />,   label: 'TACTICAL LINE' },
     square: { icon: <Square className="w-4 h-4" />,  label: 'TACTICAL SQUARE' },
     circle: { icon: <Circle className="w-4 h-4" />,  label: 'TACTICAL CIRCLE' },
   } as const;
-  const { icon, label } = map[kind];
+  const { icon, label } = map[annotation.kind];
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(annotation.title || label);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+  useEffect(() => { setVal(annotation.title || label); }, [annotation.id]); // eslint-disable-line
+  const commit = () => { onRename(annotation.id, val.trim() || label); setEditing(false); };
   return (
     <div className="flex items-center gap-2.5 mb-3">
       <div className="p-1.5 rounded-lg bg-secondary/50 text-foreground">{icon}</div>
-      <div className="text-[10px] font-display tracking-[0.18em] text-foreground">{label}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[8px] font-display tracking-[0.18em] text-muted-foreground">{label}</div>
+        {editing ? (
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <input
+              ref={inputRef}
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
+              className="flex-1 bg-secondary/40 border border-foreground/20 rounded-md px-2 py-1 text-[11px] font-display text-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30"
+              maxLength={64}
+            />
+            <button onClick={commit} className="p-1 rounded-md text-foreground hover:bg-foreground/10"><Check className="w-3 h-3" /></button>
+          </div>
+        ) : (
+          <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 mt-0.5 text-[12px] font-display text-foreground hover:text-foreground/80 truncate group">
+            <span className="truncate">{annotation.title || label}</span>
+            <Pencil className="w-3 h-3 opacity-50 group-hover:opacity-100 transition-opacity shrink-0" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-export function AnnotationDetail({ annotation, onChangeColor, onDelete }: AnnotationDetailProps) {
+export function AnnotationDetail({ annotation, onChangeColor, onRename, onChangeStyle, onChangeIcon, onDelete }: AnnotationDetailProps) {
   return (
     <div className="space-y-0.5">
-      <Title kind={annotation.kind} />
+      <TitleBar annotation={annotation} onRename={onRename} />
 
       {annotation.kind === 'point' && (
         <>
-          <Row label="Title" value={annotation.title || '—'} />
           <Row label="Latitude" value={annotation.lat.toFixed(4) + '°'} />
           <Row label="Longitude" value={annotation.lon.toFixed(4) + '°'} />
           {annotation.description && (
@@ -49,6 +79,24 @@ export function AnnotationDetail({ annotation, onChangeColor, onDelete }: Annota
               {annotation.description}
             </div>
           )}
+          <div className="mt-4">
+            <div className="mb-1.5 text-muted-foreground text-[9px] uppercase tracking-wider font-display">Icon</div>
+            <div className="grid grid-cols-4 gap-1">
+              {POINT_ICON_OPTIONS.map(opt => (
+                <button
+                  key={opt.id}
+                  onClick={() => onChangeIcon(annotation.id, opt.id)}
+                  className={`px-1.5 py-1 rounded-md text-[8px] font-display uppercase tracking-[0.1em] border transition-all ${
+                    annotation.icon === opt.id
+                      ? 'bg-foreground/15 border-foreground/40 text-foreground'
+                      : 'border-foreground/10 text-muted-foreground hover:text-foreground/80'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </>
       )}
 
@@ -72,6 +120,29 @@ export function AnnotationDetail({ annotation, onChangeColor, onDelete }: Annota
             <Row label="Radius" value={`${(annotation.radiusMeters / 1000).toFixed(1)} km`} />
           )}
         </>
+      )}
+
+      {/* Style picker (lines & shapes) */}
+      {annotation.kind !== 'point' && (
+        <div className="mt-4">
+          <div className="mb-1.5 text-muted-foreground text-[9px] uppercase tracking-wider font-display">Stroke</div>
+          <div className="grid grid-cols-4 gap-1">
+            {STYLES.filter(s => annotation.kind === 'line' || s !== 'arrow').map(s => {
+              const active = ((annotation as any).style || 'solid') === s;
+              return (
+                <button
+                  key={s}
+                  onClick={() => onChangeStyle(annotation.id, s)}
+                  className={`px-1.5 py-1 rounded-md text-[8px] font-display uppercase tracking-[0.1em] border transition-all ${
+                    active ? 'bg-foreground/15 border-foreground/40 text-foreground' : 'border-foreground/10 text-muted-foreground hover:text-foreground/80'
+                  }`}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* Color picker */}

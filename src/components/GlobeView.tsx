@@ -34,6 +34,28 @@ const ICON_ENERGY_HYDRO = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width=
 const ICON_TELECOM = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="none" stroke="#a78bfa" stroke-width="0.8"><line x1="8" y1="4" x2="8" y2="14"/><circle cx="8" cy="4" r="1.2" fill="#a78bfa"/></g></svg>`);
 const ICON_LANDING = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" fill="#22d3ee40" stroke="#22d3ee" stroke-width="1"/><circle cx="6" cy="6" r="1.5" fill="#22d3ee"/></svg>`);
 
+// ---- Annotation point icons (military silhouette set) ----
+const ANN_ICONS: Record<string, (color: string) => string> = {
+  dot: (c) => mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="5" fill="${c}" stroke="black" stroke-width="1"/></svg>`),
+  plane: (c) => mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><path d="M12 2L14 9H21L15.5 13L17 21H12L10 16L3 18L5 13L3 8H10Z" fill="${c}" stroke="black" stroke-width="0.6"/></svg>`),
+  helicopter: (c) => mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><g stroke="${c}" stroke-width="1.6" fill="${c}"><line x1="2" y1="6" x2="22" y2="6"/><rect x="9" y="9" width="6" height="7" rx="2"/><line x1="12" y1="16" x2="12" y2="20"/><line x1="9" y1="20" x2="15" y2="20"/></g></svg>`),
+  ship: (c) => mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><path d="M3 16L12 4L21 16Z" fill="${c}" stroke="black" stroke-width="0.6"/><path d="M3 17H21L19 21H5Z" fill="${c}" stroke="black" stroke-width="0.6"/></svg>`),
+  tank: (c) => mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><g fill="${c}" stroke="black" stroke-width="0.5"><rect x="2" y="13" width="20" height="6" rx="1.5"/><rect x="6" y="9" width="10" height="5" rx="1"/><rect x="14" y="10" width="8" height="2"/></g></svg>`),
+  infantry: (c) => mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><g fill="${c}" stroke="black" stroke-width="0.5"><circle cx="12" cy="5" r="3"/><path d="M7 22V13L12 9L17 13V22H14V16H10V22Z"/></g></svg>`),
+  radar: (c) => mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><g fill="none" stroke="${c}" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><line x1="12" y1="12" x2="20" y2="6"/></g></svg>`),
+  building: (c) => mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><g fill="${c}" stroke="black" stroke-width="0.5"><rect x="4" y="4" width="16" height="18"/><rect x="7" y="7" width="3" height="3" fill="black"/><rect x="14" y="7" width="3" height="3" fill="black"/><rect x="7" y="13" width="3" height="3" fill="black"/><rect x="14" y="13" width="3" height="3" fill="black"/></g></svg>`),
+};
+function getAnnotationIcon(kind: string, color: string) {
+  return (ANN_ICONS[kind] || ANN_ICONS.dot)(color);
+}
+
+function annMaterial(color: any, style: string) {
+  if (style === 'dashed') return new Cesium.PolylineDashMaterialProperty({ color, dashLength: 16 });
+  if (style === 'dotted') return new Cesium.PolylineDashMaterialProperty({ color, dashLength: 6, dashPattern: 255 });
+  if (style === 'arrow') return new Cesium.PolylineArrowMaterialProperty(color);
+  return color;
+}
+
 const SHIP_COLORS: Record<string, string> = { cargo: '#3b82f6', tanker: '#f59e0b', passenger: '#8b5cf6', fishing: '#10b981', military: '#ef4444' };
 function makeShipIcon(type: string) {
   const c = SHIP_COLORS[type] || '#3b82f6';
@@ -1098,22 +1120,47 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       cyan: '#22d3ee', orange: '#ff8c00', green: '#34d399',
     };
     annotations.forEach(a => {
-      const c = Cesium.Color.fromCssColorString(COLORS[a.color] || '#ffffff');
+      const cssColor = COLORS[a.color] || '#ffffff';
+      const c = Cesium.Color.fromCssColorString(cssColor);
       const props = { entityType: 'annotation', entityData: JSON.stringify(a) };
       if (a.kind === 'point') {
+        const iconUri = getAnnotationIcon(a.icon || 'dot', cssColor);
+        const labelText = a.title || 'POINT';
         ds.entities.add({
           id: `ann-${a.id}`,
           position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat, 0),
-          point: { pixelSize: 8, color: c, outlineColor: Cesium.Color.BLACK, outlineWidth: 1, disableDepthTestDistance: 0 },
-          label: { text: a.title, font: '10px Orbitron', fillColor: c, outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -14), disableDepthTestDistance: 0 },
+          billboard: {
+            image: iconUri, width: 22, height: 22,
+            disableDepthTestDistance: 0,
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.4, 2e7, 0.5),
+          },
+          // Leader line + label callout (string + label)
+          label: {
+            text: `── ${labelText}`,
+            font: 'bold 11px Orbitron, sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 3,
+            backgroundColor: Cesium.Color.fromCssColorString('#0b0d11cc'),
+            showBackground: true,
+            backgroundPadding: new Cesium.Cartesian2(8, 4),
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+            verticalOrigin: Cesium.VerticalOrigin.CENTER,
+            pixelOffset: new Cesium.Cartesian2(18, -22),
+            disableDepthTestDistance: 0,
+            translucencyByDistance: new Cesium.NearFarScalar(1e6, 1, 2e7, 0.6),
+          },
           properties: props,
         });
       } else if (a.kind === 'line') {
+        const style = (a as any).style || 'solid';
         ds.entities.add({
           id: `ann-${a.id}`,
           polyline: { positions: Cesium.Cartesian3.fromDegreesArray([a.start.lon, a.start.lat, a.end.lon, a.end.lat]),
-            width: 1.8, material: c, arcType: Cesium.ArcType.GEODESIC, clampToGround: false },
+            width: style === 'arrow' ? 6 : 1.8,
+            material: annMaterial(c, style),
+            arcType: Cesium.ArcType.GEODESIC, clampToGround: false },
           properties: props,
         });
       } else if (a.kind === 'square') {
@@ -1122,9 +1169,11 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         const minLon = Math.min(a.cornerA.lon, a.cornerB.lon);
         const maxLon = Math.max(a.cornerA.lon, a.cornerB.lon);
         const ring = [minLon, minLat, maxLon, minLat, maxLon, maxLat, minLon, maxLat, minLon, minLat];
+        const style = (a as any).style || 'solid';
+        const lineMat = style === 'arrow' ? c : annMaterial(c, style);
         ds.entities.add({
           id: `ann-${a.id}`,
-          polyline: { positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 1.8, material: c, clampToGround: true },
+          polyline: { positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 1.8, material: lineMat, clampToGround: true },
           properties: props,
         });
       } else if (a.kind === 'circle') {
@@ -1151,6 +1200,56 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       return { lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) };
     };
 
+    // ---- Ghost preview entity (re-created on demand) ----
+    let ghost: any = null;
+    const removeGhost = () => { if (ghost) { viewer.entities.remove(ghost); ghost = null; } };
+    const ghostColor = Cesium.Color.WHITE.withAlpha(0.4);
+
+    handler.setInputAction((mv: any) => {
+      const tool = drawingToolRef.current;
+      if (!tool || tool === 'point') { removeGhost(); return; }
+      const ll = pickLonLat(mv.endPosition);
+      if (!ll) return;
+      const first = drawStateRef.current.first;
+      if (!first) { removeGhost(); return; }
+      removeGhost();
+      if (tool === 'line') {
+        ghost = viewer.entities.add({
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray([first.lon, first.lat, ll.lon, ll.lat]),
+            width: 1.5,
+            material: new Cesium.PolylineDashMaterialProperty({ color: ghostColor, dashLength: 12 }),
+            arcType: Cesium.ArcType.GEODESIC,
+          },
+        });
+      } else if (tool === 'square') {
+        const minLat = Math.min(first.lat, ll.lat), maxLat = Math.max(first.lat, ll.lat);
+        const minLon = Math.min(first.lon, ll.lon), maxLon = Math.max(first.lon, ll.lon);
+        const ring = [minLon, minLat, maxLon, minLat, maxLon, maxLat, minLon, maxLat, minLon, minLat];
+        ghost = viewer.entities.add({
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(ring),
+            width: 1.5,
+            material: new Cesium.PolylineDashMaterialProperty({ color: ghostColor, dashLength: 12 }),
+            clampToGround: true,
+          },
+        });
+      } else if (tool === 'circle') {
+        const R = 6371000, toRad = (d: number) => d * Math.PI / 180;
+        const dLat = toRad(ll.lat - first.lat), dLon = toRad(ll.lon - first.lon);
+        const sa = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(first.lat)) * Math.cos(toRad(ll.lat)) * Math.sin(dLon / 2) ** 2;
+        const radius = Math.max(1, 2 * R * Math.asin(Math.sqrt(sa)));
+        ghost = viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(first.lon, first.lat, 0),
+          ellipse: {
+            semiMajorAxis: radius, semiMinorAxis: radius,
+            material: Cesium.Color.WHITE.withAlpha(0.05),
+            outline: true, outlineColor: ghostColor, outlineWidth: 2, height: 0,
+          },
+        });
+      }
+    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
     handler.setInputAction((click: any) => {
       const tool = drawingToolRef.current;
       if (!tool) return;
@@ -1164,6 +1263,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         } else {
           onDrawCompleteRef.current?.(tool, { a: drawStateRef.current.first, b: ll });
           drawStateRef.current.first = undefined;
+          removeGhost();
         }
       } else if (tool === 'circle') {
         if (!drawStateRef.current.first) {
@@ -1176,11 +1276,12 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
           const radius = 2 * R * Math.asin(Math.sqrt(sa));
           onDrawCompleteRef.current?.('circle', { center: a, radiusMeters: radius });
           drawStateRef.current.first = undefined;
+          removeGhost();
         }
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    return () => { handler.destroy(); drawStateRef.current = {}; };
+    return () => { removeGhost(); handler.destroy(); drawStateRef.current = {}; };
   }, [drawingTool]);
 
     return <div ref={containerRef} className="w-full h-full" />;

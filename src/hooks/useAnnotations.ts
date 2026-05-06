@@ -6,6 +6,9 @@ import {
   LineAnnotation,
   SquareAnnotation,
   CircleAnnotation,
+  PointAnnotation,
+  LineStyle,
+  PointIcon,
 } from '@/types/annotations';
 import { Aircraft } from '@/types/globe';
 
@@ -148,10 +151,10 @@ export function useAnnotations(aircraft: Aircraft[]) {
   }, [aircraft]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- CRUD ----
-  const addPoint = useCallback((lon: number, lat: number, title: string, description: string) => {
-    const ann = {
+  const addPoint = useCallback((lon: number, lat: number, title: string, description: string, icon: PointIcon = 'dot') => {
+    const ann: PointAnnotation = {
       id: uid(), kind: 'point' as const, color: 'white' as AnnotationColor,
-      createdAt: Date.now(), title, description, lon, lat,
+      createdAt: Date.now(), title, description, lon, lat, icon,
     };
     setAnnotations(prev => [...prev, ann]);
     return ann;
@@ -160,7 +163,8 @@ export function useAnnotations(aircraft: Aircraft[]) {
   const addLine = useCallback((start: { lon: number; lat: number }, end: { lon: number; lat: number }) => {
     const ann: LineAnnotation = {
       id: uid(), kind: 'line', color: 'white', createdAt: Date.now(),
-      start, end, crossedTotal: 0, crossedCivilian: 0, crossedMilitary: 0,
+      title: 'Line',
+      start, end, crossedTotal: 0, crossedCivilian: 0, crossedMilitary: 0, style: 'solid',
     };
     setAnnotations(prev => [...prev, ann]);
     return ann;
@@ -169,7 +173,8 @@ export function useAnnotations(aircraft: Aircraft[]) {
   const addSquare = useCallback((cornerA: { lon: number; lat: number }, cornerB: { lon: number; lat: number }) => {
     const ann: SquareAnnotation = {
       id: uid(), kind: 'square', color: 'white', createdAt: Date.now(),
-      cornerA, cornerB,
+      title: 'Square',
+      cornerA, cornerB, style: 'solid',
       insideTotal: 0, enteredTotal: 0, exitedTotal: 0, civilianInside: 0, militaryInside: 0,
     };
     setAnnotations(prev => [...prev, ann]);
@@ -179,7 +184,8 @@ export function useAnnotations(aircraft: Aircraft[]) {
   const addCircle = useCallback((center: { lon: number; lat: number }, radiusMeters: number) => {
     const ann: CircleAnnotation = {
       id: uid(), kind: 'circle', color: 'white', createdAt: Date.now(),
-      center, radiusMeters: Math.max(1, radiusMeters),
+      title: 'Circle',
+      center, radiusMeters: Math.max(1, radiusMeters), style: 'solid',
       insideTotal: 0, enteredTotal: 0, exitedTotal: 0, civilianInside: 0, militaryInside: 0,
     };
     setAnnotations(prev => [...prev, ann]);
@@ -188,6 +194,18 @@ export function useAnnotations(aircraft: Aircraft[]) {
 
   const updateColor = useCallback((id: string, color: AnnotationColor) => {
     setAnnotations(prev => prev.map(a => a.id === id ? ({ ...a, color } as Annotation) : a));
+  }, []);
+
+  const updateTitle = useCallback((id: string, title: string) => {
+    setAnnotations(prev => prev.map(a => a.id === id ? ({ ...a, title } as Annotation) : a));
+  }, []);
+
+  const updateStyle = useCallback((id: string, style: LineStyle) => {
+    setAnnotations(prev => prev.map(a => a.id === id ? ({ ...a, style } as Annotation) : a));
+  }, []);
+
+  const updateIcon = useCallback((id: string, icon: PointIcon) => {
+    setAnnotations(prev => prev.map(a => a.id === id && a.kind === 'point' ? ({ ...a, icon } as Annotation) : a));
   }, []);
 
   const remove = useCallback((id: string) => {
@@ -200,6 +218,6 @@ export function useAnnotations(aircraft: Aircraft[]) {
     drawingTool, setDrawingTool,
     pendingPoint, setPendingPoint,
     addPoint, addLine, addSquare, addCircle,
-    updateColor, remove,
+    updateColor, updateTitle, updateStyle, updateIcon, remove,
   };
 }
