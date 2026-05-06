@@ -2,12 +2,15 @@ import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZo
 import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, SignalZero, WifiOff, ShieldAlert, Shield, AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AnnotationDetail } from './AnnotationDetail';
-import { Annotation, AnnotationColor } from '@/types/annotations';
+import { Annotation, AnnotationColor, LineStyle, PointIcon } from '@/types/annotations';
 
 interface DetailPanelProps {
   entity: SelectedEntity;
   onClose: () => void;
   onAnnotationColor?: (id: string, color: AnnotationColor) => void;
+  onAnnotationRename?: (id: string, title: string) => void;
+  onAnnotationStyle?: (id: string, style: LineStyle) => void;
+  onAnnotationIcon?: (id: string, icon: PointIcon) => void;
   onAnnotationDelete?: (id: string) => void;
 }
 
@@ -292,13 +295,16 @@ function renderDetails(entity: SelectedEntity) {
   }
 }
 
-export function DetailPanel({ entity, onClose, onAnnotationColor, onAnnotationDelete }: DetailPanelProps) {
+export function DetailPanel({ entity, onClose, onAnnotationColor, onAnnotationRename, onAnnotationStyle, onAnnotationIcon, onAnnotationDelete }: DetailPanelProps) {
   // Annotations have their own dedicated layout (no shared header).
   if (entity.type === 'annotation') {
     return (
       <AnnotationDetail
         annotation={entity.data as Annotation}
         onChangeColor={(id, c) => onAnnotationColor?.(id, c)}
+        onRename={(id, t) => onAnnotationRename?.(id, t)}
+        onChangeStyle={(id, s) => onAnnotationStyle?.(id, s)}
+        onChangeIcon={(id, i) => onAnnotationIcon?.(id, i)}
         onDelete={(id) => onAnnotationDelete?.(id)}
       />
     );
