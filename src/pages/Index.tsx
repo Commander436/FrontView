@@ -59,6 +59,16 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
 
+  // Keep the selected annotation in sync with edits (rename/style/icon/color)
+  useEffect(() => {
+    if (selectedEntity?.type !== 'annotation') return;
+    const id = (selectedEntity.data as any).id;
+    const fresh = annotations.find(a => a.id === id);
+    if (fresh && fresh !== selectedEntity.data) {
+      selectEntity({ type: 'annotation' as any, data: fresh });
+    }
+  }, [annotations, selectedEntity, selectEntity]);
+
   // Camera coordinate tracking
   useEffect(() => {
     const interval = setInterval(() => {
