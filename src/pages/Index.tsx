@@ -12,6 +12,10 @@ import { useAnnotations } from '@/hooks/useAnnotations';
 import { PointAnnotationModal } from '@/components/PointAnnotationModal';
 import { Search } from 'lucide-react';
 import { DisplayMode } from '@/types/globe';
+import filterNormalIcon from '@/assets/filter-normal.png';
+import filterCrtIcon from '@/assets/filter-crt.png';
+import filterNvgIcon from '@/assets/filter-nvg.png';
+import filterFlirIcon from '@/assets/filter-flir.png';
 
 declare const Cesium: any;
 
@@ -25,11 +29,11 @@ function toMGRS(lat: number, lon: number): string {
   return `${zoneNum}${band} ${String(easting).padStart(5, '0')} ${String(northing).padStart(5, '0')}`;
 }
 
-const DISPLAY_MODES: { value: DisplayMode; label: string }[] = [
-  { value: 'normal', label: 'NORMAL' },
-  { value: 'crt', label: 'CRT' },
-  { value: 'nvg', label: 'NVG' },
-  { value: 'flir', label: 'FLIR' },
+const DISPLAY_MODES: { value: DisplayMode; label: string; icon: string }[] = [
+  { value: 'normal', label: 'NORMAL', icon: filterNormalIcon },
+  { value: 'crt',    label: 'CRT',    icon: filterCrtIcon },
+  { value: 'nvg',    label: 'NVG',    icon: filterNvgIcon },
+  { value: 'flir',   label: 'FLIR',   icon: filterFlirIcon },
 ];
 
 const Index = () => {
@@ -48,7 +52,7 @@ const Index = () => {
     annotations, drawingTool, setDrawingTool,
     pendingPoint, setPendingPoint,
     addPoint, addLine, addSquare, addCircle,
-    updateColor, remove,
+    updateColor, updateTitle, updateStyle, updateIcon, remove,
   } = useAnnotations(aircraft);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
@@ -176,7 +180,13 @@ const Index = () => {
         annotationCount={annotations.length}
       />
       <main className="flex-1 relative min-w-0">
-        <div className="w-full h-full" style={{ filter: globeFilter }}>
+        <div
+          className="w-full h-full"
+          style={{
+            filter: globeFilter,
+            transition: 'filter 700ms cubic-bezier(0.22, 1, 0.36, 1)',
+          }}
+        >
           <GlobeView
             layers={layers}
             aircraft={aircraft}
@@ -193,8 +203,39 @@ const Index = () => {
         </div>
         {showScope && <ScopeOverlay mode={displayMode === 'normal' ? 'scope-only' : displayMode} />}
 
-        {/* Search bar + display mode switcher — top center */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2">
+        {/* Bottom-center tactical dock — search + filter icon tiles */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2.5">
+          {/* Filter icon-tiles */}
+          <div className="flex gap-1.5 p-1.5 rounded-2xl glass-panel bg-card/60 border border-foreground/12 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+            {DISPLAY_MODES.map(m => {
+              const active = displayMode === m.value;
+              return (
+                <button
+                  key={m.value}
+                  onClick={() => setDisplayMode(m.value)}
+                  className={`relative flex flex-col items-center justify-end gap-1 w-16 h-16 rounded-xl border transition-all duration-200 ease-out ${
+                    active
+                      ? 'bg-foreground/15 border-foreground/40 text-foreground scale-[1.06] shadow-[0_0_18px_hsl(0_0%_100%/0.25)]'
+                      : 'bg-secondary/20 border-foreground/8 text-muted-foreground hover:text-foreground/80 hover:bg-foreground/5'
+                  }`}
+                  title={m.label}
+                >
+                  <img
+                    src={m.icon}
+                    alt={m.label}
+                    width={28}
+                    height={28}
+                    loading="lazy"
+                    className={`w-7 h-7 mt-1.5 transition-all duration-300 ${active ? 'opacity-100' : 'opacity-55'}`}
+                    style={{ filter: 'invert(1) brightness(1.4)' }}
+                  />
+                  <span className="text-[8px] font-display tracking-[0.15em] mb-1">{m.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search bar */}
           <form onSubmit={handleSearch} className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <input
@@ -202,29 +243,12 @@ const Index = () => {
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setSearchError(''); }}
               placeholder="Search location…"
-              className="w-72 pl-9 pr-4 py-2 rounded-xl glass-panel bg-card/60 border border-foreground/12 text-[11px] font-display text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/25 transition-all"
+              className="w-80 pl-9 pr-4 py-2 rounded-xl glass-panel bg-card/60 border border-foreground/12 text-[11px] font-display text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/25 transition-all"
             />
             {searchError && (
-              <div className="absolute top-full mt-1 left-0 text-[9px] text-destructive font-mono">{searchError}</div>
+              <div className="absolute -top-5 left-0 text-[9px] text-destructive font-mono">{searchError}</div>
             )}
           </form>
-
-          {/* Display mode segmented control */}
-          <div className="flex rounded-xl glass-panel bg-card/50 border border-foreground/10 overflow-hidden">
-            {DISPLAY_MODES.map(m => (
-              <button
-                key={m.value}
-                onClick={() => setDisplayMode(m.value)}
-                className={`px-3 py-1.5 text-[9px] font-display tracking-[0.1em] transition-all ${
-                  displayMode === m.value
-                    ? 'bg-foreground/15 text-foreground'
-                    : 'text-muted-foreground hover:text-foreground/70'
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Coordinate HUD — bottom-left tactical readout */}
@@ -238,8 +262,8 @@ const Index = () => {
           <PointAnnotationModal
             lon={pendingPoint.lon}
             lat={pendingPoint.lat}
-            onSave={(title, description) => {
-              const ann = addPoint(pendingPoint.lon, pendingPoint.lat, title, description);
+            onSave={(title, description, icon) => {
+              const ann = addPoint(pendingPoint.lon, pendingPoint.lat, title, description, icon);
               setPendingPoint(null);
               setDrawingTool(null);
               selectEntity({ type: 'annotation' as any, data: ann });
@@ -252,6 +276,9 @@ const Index = () => {
         selectedEntity={selectedEntity}
         onClose={() => selectEntity(null)}
         onAnnotationColor={updateColor}
+        onAnnotationRename={updateTitle}
+        onAnnotationStyle={updateStyle}
+        onAnnotationIcon={updateIcon}
         onAnnotationDelete={(id) => { remove(id); selectEntity(null); }}
       />
     </div>
