@@ -151,10 +151,10 @@ export function useAnnotations(aircraft: Aircraft[]) {
   }, [aircraft]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- CRUD ----
-  const addPoint = useCallback((lon: number, lat: number, title: string, description: string) => {
+  const addPoint = useCallback((lon: number, lat: number, title: string, description: string, icon: PointIcon = 'dot') => {
     const ann: PointAnnotation = {
       id: uid(), kind: 'point' as const, color: 'white' as AnnotationColor,
-      createdAt: Date.now(), title, description, lon, lat, icon: 'dot',
+      createdAt: Date.now(), title, description, lon, lat, icon,
     };
     setAnnotations(prev => [...prev, ann]);
     return ann;
