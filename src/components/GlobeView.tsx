@@ -1120,22 +1120,47 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       cyan: '#22d3ee', orange: '#ff8c00', green: '#34d399',
     };
     annotations.forEach(a => {
-      const c = Cesium.Color.fromCssColorString(COLORS[a.color] || '#ffffff');
+      const cssColor = COLORS[a.color] || '#ffffff';
+      const c = Cesium.Color.fromCssColorString(cssColor);
       const props = { entityType: 'annotation', entityData: JSON.stringify(a) };
       if (a.kind === 'point') {
+        const iconUri = getAnnotationIcon(a.icon || 'dot', cssColor);
+        const labelText = a.title || 'POINT';
         ds.entities.add({
           id: `ann-${a.id}`,
           position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat, 0),
-          point: { pixelSize: 8, color: c, outlineColor: Cesium.Color.BLACK, outlineWidth: 1, disableDepthTestDistance: 0 },
-          label: { text: a.title, font: '10px Orbitron', fillColor: c, outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -14), disableDepthTestDistance: 0 },
+          billboard: {
+            image: iconUri, width: 22, height: 22,
+            disableDepthTestDistance: 0,
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.4, 2e7, 0.5),
+          },
+          // Leader line + label callout (string + label)
+          label: {
+            text: `── ${labelText}`,
+            font: 'bold 11px Orbitron, sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 3,
+            backgroundColor: Cesium.Color.fromCssColorString('#0b0d11cc'),
+            showBackground: true,
+            backgroundPadding: new Cesium.Cartesian2(8, 4),
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+            verticalOrigin: Cesium.VerticalOrigin.CENTER,
+            pixelOffset: new Cesium.Cartesian2(18, -22),
+            disableDepthTestDistance: 0,
+            translucencyByDistance: new Cesium.NearFarScalar(1e6, 1, 2e7, 0.6),
+          },
           properties: props,
         });
       } else if (a.kind === 'line') {
+        const style = (a as any).style || 'solid';
         ds.entities.add({
           id: `ann-${a.id}`,
           polyline: { positions: Cesium.Cartesian3.fromDegreesArray([a.start.lon, a.start.lat, a.end.lon, a.end.lat]),
-            width: 1.8, material: c, arcType: Cesium.ArcType.GEODESIC, clampToGround: false },
+            width: style === 'arrow' ? 6 : 1.8,
+            material: annMaterial(c, style),
+            arcType: Cesium.ArcType.GEODESIC, clampToGround: false },
           properties: props,
         });
       } else if (a.kind === 'square') {
@@ -1144,9 +1169,11 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         const minLon = Math.min(a.cornerA.lon, a.cornerB.lon);
         const maxLon = Math.max(a.cornerA.lon, a.cornerB.lon);
         const ring = [minLon, minLat, maxLon, minLat, maxLon, maxLat, minLon, maxLat, minLon, minLat];
+        const style = (a as any).style || 'solid';
+        const lineMat = style === 'arrow' ? c : annMaterial(c, style);
         ds.entities.add({
           id: `ann-${a.id}`,
-          polyline: { positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 1.8, material: c, clampToGround: true },
+          polyline: { positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 1.8, material: lineMat, clampToGround: true },
           properties: props,
         });
       } else if (a.kind === 'circle') {
@@ -1173,6 +1200,56 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       return { lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) };
     };
 
+    // ---- Ghost preview entity (re-created on demand) ----
+    let ghost: any = null;
+    const removeGhost = () => { if (ghost) { viewer.entities.remove(ghost); ghost = null; } };
+    const ghostColor = Cesium.Color.WHITE.withAlpha(0.4);
+
+    handler.setInputAction((mv: any) => {
+      const tool = drawingToolRef.current;
+      if (!tool || tool === 'point') { removeGhost(); return; }
+      const ll = pickLonLat(mv.endPosition);
+      if (!ll) return;
+      const first = drawStateRef.current.first;
+      if (!first) { removeGhost(); return; }
+      removeGhost();
+      if (tool === 'line') {
+        ghost = viewer.entities.add({
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray([first.lon, first.lat, ll.lon, ll.lat]),
+            width: 1.5,
+            material: new Cesium.PolylineDashMaterialProperty({ color: ghostColor, dashLength: 12 }),
+            arcType: Cesium.ArcType.GEODESIC,
+          },
+        });
+      } else if (tool === 'square') {
+        const minLat = Math.min(first.lat, ll.lat), maxLat = Math.max(first.lat, ll.lat);
+        const minLon = Math.min(first.lon, ll.lon), maxLon = Math.max(first.lon, ll.lon);
+        const ring = [minLon, minLat, maxLon, minLat, maxLon, maxLat, minLon, maxLat, minLon, minLat];
+        ghost = viewer.entities.add({
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(ring),
+            width: 1.5,
+            material: new Cesium.PolylineDashMaterialProperty({ color: ghostColor, dashLength: 12 }),
+            clampToGround: true,
+          },
+        });
+      } else if (tool === 'circle') {
+        const R = 6371000, toRad = (d: number) => d * Math.PI / 180;
+        const dLat = toRad(ll.lat - first.lat), dLon = toRad(ll.lon - first.lon);
+        const sa = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(first.lat)) * Math.cos(toRad(ll.lat)) * Math.sin(dLon / 2) ** 2;
+        const radius = Math.max(1, 2 * R * Math.asin(Math.sqrt(sa)));
+        ghost = viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(first.lon, first.lat, 0),
+          ellipse: {
+            semiMajorAxis: radius, semiMinorAxis: radius,
+            material: Cesium.Color.WHITE.withAlpha(0.05),
+            outline: true, outlineColor: ghostColor, outlineWidth: 2, height: 0,
+          },
+        });
+      }
+    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
     handler.setInputAction((click: any) => {
       const tool = drawingToolRef.current;
       if (!tool) return;
@@ -1186,6 +1263,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         } else {
           onDrawCompleteRef.current?.(tool, { a: drawStateRef.current.first, b: ll });
           drawStateRef.current.first = undefined;
+          removeGhost();
         }
       } else if (tool === 'circle') {
         if (!drawStateRef.current.first) {
@@ -1198,11 +1276,12 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
           const radius = 2 * R * Math.asin(Math.sqrt(sa));
           onDrawCompleteRef.current?.('circle', { center: a, radiusMeters: radius });
           drawStateRef.current.first = undefined;
+          removeGhost();
         }
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    return () => { handler.destroy(); drawStateRef.current = {}; };
+    return () => { removeGhost(); handler.destroy(); drawStateRef.current = {}; };
   }, [drawingTool]);
 
     return <div ref={containerRef} className="w-full h-full" />;
