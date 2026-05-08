@@ -125,7 +125,7 @@ interface GlobeViewProps {
   selectedEntity: { type: string; data: any } | null;
   onEntitySelect: (entity: any) => void;
   annotations?: any[];
-  drawingTool?: 'point' | 'line' | 'square' | 'circle' | null;
+  drawingTool?: 'point' | 'line' | 'square' | 'circle' | 'triangle' | 'custom' | null;
   onDrawComplete?: (kind: string, payload: any) => void;
 }
 
