@@ -9,6 +9,8 @@ import {
   PointAnnotation,
   LineStyle,
   PointIcon,
+  TriangleAnnotation,
+  CustomAnnotation,
 } from '@/types/annotations';
 import { Aircraft } from '@/types/globe';
 
@@ -31,6 +33,18 @@ function isInsideSquare(p: { lon: number; lat: number }, sq: SquareAnnotation): 
 }
 function isInsideCircle(p: { lon: number; lat: number }, c: CircleAnnotation): boolean {
   return haversine(p, c.center) <= c.radiusMeters;
+}
+function isInsidePolygon(p: { lon: number; lat: number }, verts: { lon: number; lat: number }[]): boolean {
+  // Ray-cast in lon/lat plane (good enough at these scales)
+  let inside = false;
+  for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+    const xi = verts[i].lon, yi = verts[i].lat;
+    const xj = verts[j].lon, yj = verts[j].lat;
+    const intersect = ((yi > p.lat) !== (yj > p.lat)) &&
+      (p.lon < ((xj - xi) * (p.lat - yi)) / ((yj - yi) || 1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
 }
 // Segment-segment intersection on a 2D plane (good enough at globe scales here).
 function segmentsCross(
@@ -78,14 +92,18 @@ export function useAnnotations(aircraft: Aircraft[]) {
     const updated = annotations.map(ann => {
       if (ann.kind === 'point') return ann;
 
-      if (ann.kind === 'square' || ann.kind === 'circle') {
+      if (ann.kind === 'square' || ann.kind === 'circle' || ann.kind === 'triangle' || (ann.kind === 'custom' && ann.closed)) {
         const prevInside = insideStateRef.current.get(ann.id) ?? new Set<string>();
         const nowInside = new Set<string>();
         let civInside = 0, milInside = 0;
         for (const a of aircraft) {
           if (a.latitude == null || a.longitude == null) continue;
           const p = { lon: a.longitude, lat: a.latitude };
-          const inside = ann.kind === 'square' ? isInsideSquare(p, ann) : isInsideCircle(p, ann);
+          let inside = false;
+          if (ann.kind === 'square') inside = isInsideSquare(p, ann);
+          else if (ann.kind === 'circle') inside = isInsideCircle(p, ann);
+          else if (ann.kind === 'triangle') inside = isInsidePolygon(p, ann.vertices);
+          else if (ann.kind === 'custom') inside = isInsidePolygon(p, ann.vertices);
           if (inside) {
             nowInside.add(a.icao24);
             if (a.isMilitary) milInside++; else civInside++;
@@ -96,14 +114,14 @@ export function useAnnotations(aircraft: Aircraft[]) {
         for (const id of nowInside) if (!prevInside.has(id)) entered++;
         for (const id of prevInside) if (!nowInside.has(id)) exited++;
         insideStateRef.current.set(ann.id, nowInside);
-        const next: SquareAnnotation | CircleAnnotation = {
+        const next = {
           ...ann,
           insideTotal: nowInside.size,
           enteredTotal: entered,
           exitedTotal: exited,
           civilianInside: civInside,
           militaryInside: milInside,
-        } as SquareAnnotation | CircleAnnotation;
+        } as typeof ann;
         if (
           next.insideTotal !== ann.insideTotal ||
           next.enteredTotal !== ann.enteredTotal ||
@@ -114,25 +132,34 @@ export function useAnnotations(aircraft: Aircraft[]) {
         return next;
       }
 
-      if (ann.kind === 'line') {
+      if (ann.kind === 'line' || (ann.kind === 'custom' && !ann.closed)) {
         let crossed = ann.crossedTotal;
         let civ = ann.crossedCivilian;
         let mil = ann.crossedMilitary;
+        // Build segment list
+        const segs: { a: { lon: number; lat: number }; b: { lon: number; lat: number } }[] = [];
+        if (ann.kind === 'line') segs.push({ a: ann.start, b: ann.end });
+        else for (let i = 0; i < ann.vertices.length - 1; i++) segs.push({ a: ann.vertices[i], b: ann.vertices[i + 1] });
         for (const a of aircraft) {
           if (a.latitude == null || a.longitude == null) continue;
           const cur = { lon: a.longitude, lat: a.latitude, isMilitary: !!a.isMilitary };
           const prev = lastPosRef.current.get(a.icao24);
-          if (prev && segmentsCross(prev, cur, ann.start, ann.end)) {
-            crossed++;
-            if (cur.isMilitary) mil++; else civ++;
+          if (prev) {
+            for (const s of segs) {
+              if (segmentsCross(prev, cur, s.a, s.b)) {
+                crossed++;
+                if (cur.isMilitary) mil++; else civ++;
+                break;
+              }
+            }
           }
         }
-        const next: LineAnnotation = {
+        const next = {
           ...ann,
           crossedTotal: crossed,
           crossedCivilian: civ,
           crossedMilitary: mil,
-        };
+        } as typeof ann;
         if (
           next.crossedTotal !== ann.crossedTotal ||
           next.crossedCivilian !== ann.crossedCivilian ||
@@ -192,6 +219,29 @@ export function useAnnotations(aircraft: Aircraft[]) {
     return ann;
   }, []);
 
+  const addTriangle = useCallback((vertices: { lon: number; lat: number }[]) => {
+    const v = vertices.slice(0, 3) as TriangleAnnotation['vertices'];
+    const ann: TriangleAnnotation = {
+      id: uid(), kind: 'triangle', color: 'white', createdAt: Date.now(),
+      title: 'Triangle', vertices: v, style: 'solid',
+      insideTotal: 0, enteredTotal: 0, exitedTotal: 0, civilianInside: 0, militaryInside: 0,
+    };
+    setAnnotations(prev => [...prev, ann]);
+    return ann;
+  }, []);
+
+  const addCustom = useCallback((vertices: { lon: number; lat: number }[], closed: boolean) => {
+    const ann: CustomAnnotation = {
+      id: uid(), kind: 'custom', color: 'white', createdAt: Date.now(),
+      title: closed ? 'Custom Shape' : 'Custom Line',
+      vertices, closed, style: 'solid',
+      insideTotal: 0, enteredTotal: 0, exitedTotal: 0, civilianInside: 0, militaryInside: 0,
+      crossedTotal: 0, crossedCivilian: 0, crossedMilitary: 0,
+    };
+    setAnnotations(prev => [...prev, ann]);
+    return ann;
+  }, []);
+
   const updateColor = useCallback((id: string, color: AnnotationColor) => {
     setAnnotations(prev => prev.map(a => a.id === id ? ({ ...a, color } as Annotation) : a));
   }, []);
@@ -213,11 +263,17 @@ export function useAnnotations(aircraft: Aircraft[]) {
     setAnnotations(prev => prev.filter(a => a.id !== id));
   }, []);
 
+  const clearAll = useCallback(() => {
+    insideStateRef.current.clear();
+    lastPosRef.current.clear();
+    setAnnotations([]);
+  }, []);
+
   return {
     annotations,
     drawingTool, setDrawingTool,
     pendingPoint, setPendingPoint,
-    addPoint, addLine, addSquare, addCircle,
-    updateColor, updateTitle, updateStyle, updateIcon, remove,
+    addPoint, addLine, addSquare, addCircle, addTriangle, addCustom,
+    updateColor, updateTitle, updateStyle, updateIcon, remove, clearAll,
   };
 }
