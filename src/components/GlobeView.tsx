@@ -1381,8 +1381,40 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
           drawStateRef.current.first = undefined;
           removeGhost();
         }
+      } else if (tool === 'triangle') {
+        const verts = drawStateRef.current.vertices ?? [];
+        verts.push(ll);
+        drawStateRef.current.vertices = verts;
+        if (verts.length >= 3) {
+          onDrawCompleteRef.current?.('triangle', { vertices: verts.slice(0, 3) });
+          drawStateRef.current.vertices = undefined;
+          removeGhost();
+        }
+      } else if (tool === 'custom') {
+        const verts = drawStateRef.current.vertices ?? [];
+        // If snapping to first vertex, close as polygon
+        if (verts.length >= 2 && isSnappedToFirst(click.position, verts[0])) {
+          onDrawCompleteRef.current?.('custom', { vertices: verts, closed: true });
+          drawStateRef.current.vertices = undefined;
+          removeGhost();
+          return;
+        }
+        verts.push(ll);
+        drawStateRef.current.vertices = verts;
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    // Right-click: finish 'custom' as an open line (no closing snap)
+    handler.setInputAction(() => {
+      const tool = drawingToolRef.current;
+      if (tool !== 'custom') return;
+      const verts = drawStateRef.current.vertices;
+      if (verts && verts.length >= 2) {
+        onDrawCompleteRef.current?.('custom', { vertices: verts, closed: false });
+      }
+      drawStateRef.current.vertices = undefined;
+      removeGhost();
+    }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
 
     return () => { removeGhost(); handler.destroy(); drawStateRef.current = {}; };
   }, [drawingTool]);
