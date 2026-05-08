@@ -6,7 +6,7 @@ import {
   Zap, Radio, Ship, Factory, ChevronDown,
   Navigation, Globe, Box, BarChart3,
   WifiOff, SignalZero, ShieldAlert,
-  Pencil, Minus, Square, Circle,
+  Pencil, Minus, Square, Circle, Triangle, Spline, Trash2,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DrawingTool } from '@/types/annotations';
@@ -24,6 +24,7 @@ interface LeftPanelProps {
   drawingTool: DrawingTool;
   onSetDrawingTool: (tool: DrawingTool) => void;
   annotationCount: number;
+  onClearAllAnnotations: () => void;
 }
 
 interface ToggleItem {
@@ -136,9 +137,11 @@ function Category({ title, icon: Icon, items, layers, onToggle, getCount, defaul
 export function LeftPanel({
   layers, onToggleLayer, displayMode, onSetDisplayMode,
   aircraftCount, satelliteCount, shipCount, collapsed, onToggleCollapse,
-  drawingTool, onSetDrawingTool, annotationCount,
+  drawingTool, onSetDrawingTool, annotationCount, onClearAllAnnotations,
 }: LeftPanelProps) {
   const [time, setTime] = useState(new Date());
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     const i = setInterval(() => setTime(new Date()), 1000);
@@ -146,6 +149,16 @@ export function LeftPanel({
   }, []);
 
   const utc = time.toISOString().slice(11, 19);
+
+  const TOOL_OPTIONS: { tool: NonNullable<DrawingTool>; label: string; Icon: any; hint: string }[] = [
+    { tool: 'point',    label: 'POINT',    Icon: MapPin,   hint: 'Click on globe to place point' },
+    { tool: 'line',     label: 'LINE',     Icon: Minus,    hint: 'Click start, then click end' },
+    { tool: 'square',   label: 'SQUARE',   Icon: Square,   hint: 'Click two opposite corners' },
+    { tool: 'circle',   label: 'CIRCLE',   Icon: Circle,   hint: 'Click center, then edge' },
+    { tool: 'triangle', label: 'TRIANGLE', Icon: Triangle, hint: 'Click 3 vertices' },
+    { tool: 'custom',   label: 'CUSTOM',   Icon: Spline,   hint: 'Click points · close on first point or right-click to finish as line' },
+  ];
+  const activeTool = TOOL_OPTIONS.find(o => o.tool === drawingTool);
 
   const getCount = (key: string) => {
     if (key === 'aircraft') return aircraftCount;
