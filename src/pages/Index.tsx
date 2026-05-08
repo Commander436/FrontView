@@ -51,11 +51,12 @@ const Index = () => {
   const {
     annotations, drawingTool, setDrawingTool,
     pendingPoint, setPendingPoint,
-    addPoint, addLine, addSquare, addCircle,
-    updateColor, updateTitle, updateStyle, updateIcon, remove,
+    addPoint, addLine, addSquare, addCircle, addTriangle, addCustom,
+    updateColor, updateTitle, updateStyle, updateIcon, remove, clearAll,
   } = useAnnotations(aircraft);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
+  const [cameraHeading, setCameraHeading] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
 
@@ -82,6 +83,7 @@ const Index = () => {
           lon: Cesium.Math.toDegrees(carto.longitude),
         });
       }
+      setCameraHeading(Cesium.Math.toDegrees(viewer.camera.heading));
     }, 200);
     return () => clearInterval(interval);
   }, []);
@@ -158,6 +160,14 @@ const Index = () => {
       const ann = addCircle(payload.center, payload.radiusMeters);
       selectEntity({ type: 'annotation' as any, data: ann });
       setDrawingTool(null);
+    } else if (kind === 'triangle') {
+      const ann = addTriangle(payload.vertices);
+      selectEntity({ type: 'annotation' as any, data: ann });
+      setDrawingTool(null);
+    } else if (kind === 'custom') {
+      const ann = addCustom(payload.vertices, payload.closed);
+      selectEntity({ type: 'annotation' as any, data: ann });
+      setDrawingTool(null);
     }
   };
 
@@ -188,6 +198,7 @@ const Index = () => {
         drawingTool={drawingTool}
         onSetDrawingTool={setDrawingTool}
         annotationCount={annotations.length}
+        onClearAllAnnotations={clearAll}
       />
       <main className="flex-1 relative min-w-0">
         <div
