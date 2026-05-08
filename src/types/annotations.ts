@@ -9,7 +9,7 @@ export const ANNOTATION_COLOR_HEX: Record<AnnotationColor, string> = {
   green:  '#34d399',
 };
 
-export type AnnotationKind = 'point' | 'line' | 'square' | 'circle';
+export type AnnotationKind = 'point' | 'line' | 'square' | 'circle' | 'triangle' | 'custom';
 export type DrawingTool = AnnotationKind | null;
 
 export type LineStyle = 'solid' | 'dashed' | 'dotted' | 'arrow';
@@ -83,8 +83,39 @@ export interface CircleAnnotation extends AnnotationBase {
   style?: LineStyle;
 }
 
+export interface TriangleAnnotation extends AnnotationBase {
+  kind: 'triangle';
+  vertices: [{ lon: number; lat: number }, { lon: number; lat: number }, { lon: number; lat: number }];
+  insideTotal: number;
+  enteredTotal: number;
+  exitedTotal: number;
+  civilianInside: number;
+  militaryInside: number;
+  style?: LineStyle;
+}
+
+// Custom polyline OR polygon (closed if first==last vertex)
+export interface CustomAnnotation extends AnnotationBase {
+  kind: 'custom';
+  vertices: { lon: number; lat: number }[];
+  closed: boolean;
+  // Shape analytics (only meaningful when closed)
+  insideTotal: number;
+  enteredTotal: number;
+  exitedTotal: number;
+  civilianInside: number;
+  militaryInside: number;
+  // Line analytics (only meaningful when open)
+  crossedTotal: number;
+  crossedCivilian: number;
+  crossedMilitary: number;
+  style?: LineStyle;
+}
+
 export type Annotation =
   | PointAnnotation
   | LineAnnotation
   | SquareAnnotation
-  | CircleAnnotation;
+  | CircleAnnotation
+  | TriangleAnnotation
+  | CustomAnnotation;

@@ -46,6 +46,7 @@ export function useAIS(enabled: boolean) {
         console.log('[AIS] WebSocket connected: true');
         // Try connecting without a key — AISStream may accept or reject
         ws.send(JSON.stringify({
+          APIKey: "",
           BoundingBoxes: [[[-90, -180], [90, 180]]],
           FilterMessageTypes: ['PositionReport'],
         }));

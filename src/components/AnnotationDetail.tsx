@@ -1,5 +1,5 @@
 import { Annotation, AnnotationColor, ANNOTATION_COLOR_HEX, LineStyle, PointIcon, POINT_ICON_OPTIONS } from '@/types/annotations';
-import { MapPin, Minus, Square, Circle, Trash2, Palette, Pencil, Check } from 'lucide-react';
+import { MapPin, Minus, Square, Circle, Triangle, Spline, Trash2, Palette, Pencil, Check } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 interface AnnotationDetailProps {
@@ -29,6 +29,8 @@ function TitleBar({ annotation, onRename }: { annotation: Annotation; onRename: 
     line:   { icon: <Minus className="w-4 h-4" />,   label: 'TACTICAL LINE' },
     square: { icon: <Square className="w-4 h-4" />,  label: 'TACTICAL SQUARE' },
     circle: { icon: <Circle className="w-4 h-4" />,  label: 'TACTICAL CIRCLE' },
+    triangle: { icon: <Triangle className="w-4 h-4" />, label: 'TACTICAL TRIANGLE' },
+    custom:  { icon: <Spline className="w-4 h-4" />,    label: 'CUSTOM ANNOTATION' },
   } as const;
   const { icon, label } = map[annotation.kind];
   const [editing, setEditing] = useState(false);
@@ -109,7 +111,7 @@ export function AnnotationDetail({ annotation, onChangeColor, onRename, onChange
         </>
       )}
 
-      {(annotation.kind === 'square' || annotation.kind === 'circle') && (
+      {(annotation.kind === 'square' || annotation.kind === 'circle' || annotation.kind === 'triangle') && (
         <>
           <Row label="Inside" value={annotation.insideTotal} />
           <Row label="Entered" value={annotation.enteredTotal} />
@@ -122,12 +124,34 @@ export function AnnotationDetail({ annotation, onChangeColor, onRename, onChange
         </>
       )}
 
+      {annotation.kind === 'custom' && (
+        <>
+          <Row label="Vertices" value={annotation.vertices.length} />
+          <Row label="Type" value={annotation.closed ? 'Polygon' : 'Polyline'} />
+          {annotation.closed ? (
+            <>
+              <Row label="Inside" value={annotation.insideTotal} />
+              <Row label="Entered" value={annotation.enteredTotal} />
+              <Row label="Exited" value={annotation.exitedTotal} />
+              <Row label="Civilian Inside" value={annotation.civilianInside} />
+              <Row label="Military Inside" value={annotation.militaryInside} />
+            </>
+          ) : (
+            <>
+              <Row label="Entities Crossed" value={annotation.crossedTotal} />
+              <Row label="Civilian" value={annotation.crossedCivilian} />
+              <Row label="Military" value={annotation.crossedMilitary} />
+            </>
+          )}
+        </>
+      )}
+
       {/* Style picker (lines & shapes) */}
       {annotation.kind !== 'point' && (
         <div className="mt-4">
           <div className="mb-1.5 text-muted-foreground text-[9px] uppercase tracking-wider font-display">Stroke</div>
           <div className="grid grid-cols-4 gap-1">
-            {STYLES.filter(s => annotation.kind === 'line' || s !== 'arrow').map(s => {
+            {STYLES.filter(s => annotation.kind === 'line' || (annotation.kind === 'custom' && !annotation.closed) || s !== 'arrow').map(s => {
               const active = ((annotation as any).style || 'solid') === s;
               return (
                 <button

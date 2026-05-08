@@ -6,7 +6,7 @@ import {
   Zap, Radio, Ship, Factory, ChevronDown,
   Navigation, Globe, Box, BarChart3,
   WifiOff, SignalZero, ShieldAlert,
-  Pencil, Minus, Square, Circle,
+  Pencil, Minus, Square, Circle, Triangle, Spline, Trash2,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DrawingTool } from '@/types/annotations';
@@ -24,6 +24,7 @@ interface LeftPanelProps {
   drawingTool: DrawingTool;
   onSetDrawingTool: (tool: DrawingTool) => void;
   annotationCount: number;
+  onClearAllAnnotations: () => void;
 }
 
 interface ToggleItem {
@@ -136,9 +137,11 @@ function Category({ title, icon: Icon, items, layers, onToggle, getCount, defaul
 export function LeftPanel({
   layers, onToggleLayer, displayMode, onSetDisplayMode,
   aircraftCount, satelliteCount, shipCount, collapsed, onToggleCollapse,
-  drawingTool, onSetDrawingTool, annotationCount,
+  drawingTool, onSetDrawingTool, annotationCount, onClearAllAnnotations,
 }: LeftPanelProps) {
   const [time, setTime] = useState(new Date());
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     const i = setInterval(() => setTime(new Date()), 1000);
@@ -146,6 +149,16 @@ export function LeftPanel({
   }, []);
 
   const utc = time.toISOString().slice(11, 19);
+
+  const TOOL_OPTIONS: { tool: NonNullable<DrawingTool>; label: string; Icon: any; hint: string }[] = [
+    { tool: 'point',    label: 'POINT',    Icon: MapPin,   hint: 'Click on globe to place point' },
+    { tool: 'line',     label: 'LINE',     Icon: Minus,    hint: 'Click start, then click end' },
+    { tool: 'square',   label: 'SQUARE',   Icon: Square,   hint: 'Click two opposite corners' },
+    { tool: 'circle',   label: 'CIRCLE',   Icon: Circle,   hint: 'Click center, then edge' },
+    { tool: 'triangle', label: 'TRIANGLE', Icon: Triangle, hint: 'Click 3 vertices' },
+    { tool: 'custom',   label: 'CUSTOM',   Icon: Spline,   hint: 'Click points · close on first point or right-click to finish as line' },
+  ];
+  const activeTool = TOOL_OPTIONS.find(o => o.tool === drawingTool);
 
   const getCount = (key: string) => {
     if (key === 'aircraft') return aircraftCount;
@@ -194,45 +207,97 @@ export function LeftPanel({
           <Category title="Extras" icon={Box} items={EXTRAS_TOGGLES} layers={layers} onToggle={onToggleLayer} />
           <Category title="Threat Intelligence" icon={BarChart3} items={DATA_LAYER_TOGGLES} layers={layers} onToggle={onToggleLayer} />
 
-          {/* Lines & Shapes — annotation drawing tools */}
+          {/* Lines & Shapes — dropdown selector */}
           <div className="rounded-2xl border border-foreground/8 overflow-hidden glass-panel bg-card/30">
             <div className="px-4 py-3 flex items-center gap-2.5 text-[9px] font-display uppercase tracking-[0.18em] text-muted-foreground">
               <Pencil className="w-3.5 h-3.5 text-foreground/60" />
-              <span className="flex-1">Lines &amp; Shapes</span>
+              <span className="flex-1">
+                Lines &amp; Shapes
+                {activeTool && (
+                  <span className="ml-1.5 text-foreground inline-flex items-center gap-1">
+                    · <activeTool.Icon className="w-3 h-3 inline" /> {activeTool.label}
+                  </span>
+                )}
+              </span>
               {annotationCount > 0 && (
                 <span className="text-[8px] font-mono text-foreground bg-foreground/10 px-1.5 py-0.5 rounded-full">{annotationCount}</span>
               )}
             </div>
-            <div className="px-2 pb-2 grid grid-cols-2 gap-1">
-              {([
-                { tool: 'point' as const,  label: 'POINT',  Icon: MapPin },
-                { tool: 'line' as const,   label: 'LINE',   Icon: Minus },
-                { tool: 'square' as const, label: 'SQUARE', Icon: Square },
-                { tool: 'circle' as const, label: 'CIRCLE', Icon: Circle },
-              ]).map(({ tool, label, Icon }) => {
-                const active = drawingTool === tool;
-                return (
-                  <button
-                    key={tool}
-                    onClick={() => onSetDrawingTool(active ? null : tool)}
-                    className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs transition-all duration-200 ${
-                      active
-                        ? 'bg-foreground/15 border border-foreground/30 text-foreground shadow-[0_0_8px_hsl(0_0%_100%/0.15)]'
-                        : 'text-muted-foreground border border-transparent hover:bg-secondary/40 hover:text-foreground/80'
-                    }`}
-                  >
-                    <Icon className="w-3.5 h-3.5" />
-                    <span className="font-display tracking-[0.12em] text-[8px]">{label}</span>
-                  </button>
-                );
-              })}
+            <div className="px-2 pb-2 relative">
+              <button
+                onClick={() => setToolMenuOpen(o => !o)}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs border transition-all duration-200 ${
+                  drawingTool
+                    ? 'bg-foreground/15 border-foreground/30 text-foreground shadow-[0_0_8px_hsl(0_0%_100%/0.15)]'
+                    : 'text-muted-foreground border-foreground/10 hover:bg-secondary/40 hover:text-foreground/80'
+                }`}
+              >
+                {activeTool ? <activeTool.Icon className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+                <span className="flex-1 text-left font-display tracking-[0.12em] text-[9px]">
+                  {activeTool ? activeTool.label : 'SELECT TOOL'}
+                </span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${toolMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {toolMenuOpen && (
+                <div className="mt-1 rounded-xl border border-foreground/10 bg-card/80 backdrop-blur overflow-hidden">
+                  {drawingTool && (
+                    <button
+                      onClick={() => { onSetDrawingTool(null); setToolMenuOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-[9px] font-display tracking-[0.12em] text-muted-foreground hover:bg-foreground/5 hover:text-foreground transition-colors"
+                    >
+                      <span className="w-3.5 h-3.5 inline-flex items-center justify-center">×</span>
+                      <span className="flex-1 text-left">DESELECT</span>
+                    </button>
+                  )}
+                  {TOOL_OPTIONS.map(({ tool, label, Icon }) => {
+                    const active = drawingTool === tool;
+                    return (
+                      <button
+                        key={tool}
+                        onClick={() => { onSetDrawingTool(tool); setToolMenuOpen(false); }}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-[9px] font-display tracking-[0.12em] transition-colors ${
+                          active
+                            ? 'bg-foreground/10 text-foreground'
+                            : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span className="flex-1 text-left">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            {drawingTool && (
+            {activeTool && (
               <div className="px-3 pb-3 text-[9px] font-mono text-foreground/60 border-t border-foreground/8 pt-2">
-                {drawingTool === 'point' && '· Click on globe to place point'}
-                {drawingTool === 'line' && '· Click start, then click end'}
-                {drawingTool === 'square' && '· Click two opposite corners'}
-                {drawingTool === 'circle' && '· Click center, drag to set radius'}
+                · {activeTool.hint}
+              </div>
+            )}
+            {annotationCount > 0 && (
+              <div className="px-2 pb-2 border-t border-foreground/8 pt-2">
+                {!confirmClear ? (
+                  <button
+                    onClick={() => setConfirmClear(true)}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-[9px] font-display tracking-[0.12em] uppercase border border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/15 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" /> Delete all
+                  </button>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="text-[9px] font-display tracking-[0.12em] text-destructive text-center">ARE YOU SURE?</div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        onClick={() => setConfirmClear(false)}
+                        className="px-2 py-1.5 rounded-lg text-[9px] font-display tracking-[0.12em] uppercase border border-foreground/15 text-muted-foreground hover:text-foreground hover:bg-foreground/5"
+                      >Cancel</button>
+                      <button
+                        onClick={() => { onClearAllAnnotations(); setConfirmClear(false); }}
+                        className="px-2 py-1.5 rounded-lg text-[9px] font-display tracking-[0.12em] uppercase border border-destructive/40 text-destructive bg-destructive/15 hover:bg-destructive/25"
+                      >Confirm</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -51,11 +51,12 @@ const Index = () => {
   const {
     annotations, drawingTool, setDrawingTool,
     pendingPoint, setPendingPoint,
-    addPoint, addLine, addSquare, addCircle,
-    updateColor, updateTitle, updateStyle, updateIcon, remove,
+    addPoint, addLine, addSquare, addCircle, addTriangle, addCustom,
+    updateColor, updateTitle, updateStyle, updateIcon, remove, clearAll,
   } = useAnnotations(aircraft);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
+  const [cameraHeading, setCameraHeading] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
 
@@ -82,6 +83,7 @@ const Index = () => {
           lon: Cesium.Math.toDegrees(carto.longitude),
         });
       }
+      setCameraHeading(Cesium.Math.toDegrees(viewer.camera.heading));
     }, 200);
     return () => clearInterval(interval);
   }, []);
@@ -158,6 +160,14 @@ const Index = () => {
       const ann = addCircle(payload.center, payload.radiusMeters);
       selectEntity({ type: 'annotation' as any, data: ann });
       setDrawingTool(null);
+    } else if (kind === 'triangle') {
+      const ann = addTriangle(payload.vertices);
+      selectEntity({ type: 'annotation' as any, data: ann });
+      setDrawingTool(null);
+    } else if (kind === 'custom') {
+      const ann = addCustom(payload.vertices, payload.closed);
+      selectEntity({ type: 'annotation' as any, data: ann });
+      setDrawingTool(null);
     }
   };
 
@@ -188,6 +198,7 @@ const Index = () => {
         drawingTool={drawingTool}
         onSetDrawingTool={setDrawingTool}
         annotationCount={annotations.length}
+        onClearAllAnnotations={clearAll}
       />
       <main className="flex-1 relative min-w-0">
         <div
@@ -213,53 +224,78 @@ const Index = () => {
         </div>
         {showScope && <ScopeOverlay mode={displayMode === 'normal' ? 'scope-only' : displayMode} />}
 
-        {/* Bottom-center tactical dock — search + filter icon tiles */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2.5">
-          {/* Filter icon-tiles */}
-          <div className="flex gap-1.5 p-1.5 rounded-2xl glass-panel bg-card/60 border border-foreground/12 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-            {DISPLAY_MODES.map(m => {
-              const active = displayMode === m.value;
-              return (
-                <button
-                  key={m.value}
-                  onClick={() => setDisplayMode(m.value)}
-                  className={`relative flex flex-col items-center justify-end gap-1 w-16 h-16 rounded-xl border transition-all duration-200 ease-out ${
-                    active
-                      ? 'bg-foreground/15 border-foreground/40 text-foreground scale-[1.06] shadow-[0_0_18px_hsl(0_0%_100%/0.25)]'
-                      : 'bg-secondary/20 border-foreground/8 text-muted-foreground hover:text-foreground/80 hover:bg-foreground/5'
-                  }`}
-                  title={m.label}
-                >
-                  <img
-                    src={m.icon}
-                    alt={m.label}
-                    width={28}
-                    height={28}
-                    loading="lazy"
-                    className={`w-7 h-7 mt-1.5 transition-all duration-300 ${active ? 'opacity-100' : 'opacity-55'}`}
-                    style={{ filter: 'invert(1) brightness(1.4)' }}
-                  />
-                  <span className="text-[8px] font-display tracking-[0.15em] mb-1">{m.label}</span>
-                </button>
-              );
-            })}
+        {/* Unified bottom-center tactical dock */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
+          <div className="flex flex-col items-stretch gap-2 p-2.5 rounded-2xl glass-panel bg-card/70 border border-foreground/15 shadow-[0_10px_40px_rgba(0,0,0,0.55)] backdrop-blur-md">
+            {/* Search bar */}
+            <form onSubmit={handleSearch} className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); setSearchError(''); }}
+                placeholder="Search location…"
+                className="w-[22rem] pl-9 pr-4 py-2 rounded-xl bg-secondary/40 border border-foreground/12 text-[11px] font-display text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/30 transition-all"
+              />
+              {searchError && (
+                <div className="absolute -top-5 left-0 text-[9px] text-destructive font-mono">{searchError}</div>
+              )}
+            </form>
+            {/* Filter icon-tiles */}
+            <div className="flex gap-1.5 justify-center">
+              {DISPLAY_MODES.map(m => {
+                const active = displayMode === m.value;
+                return (
+                  <button
+                    key={m.value}
+                    onClick={() => setDisplayMode(m.value)}
+                    className={`relative flex flex-col items-center justify-end gap-1 w-[5.25rem] h-14 rounded-xl border transition-all duration-200 ease-out ${
+                      active
+                        ? 'bg-foreground/15 border-foreground/40 text-foreground shadow-[0_0_18px_hsl(0_0%_100%/0.25)]'
+                        : 'bg-secondary/30 border-foreground/8 text-muted-foreground hover:text-foreground/80 hover:bg-foreground/5'
+                    }`}
+                    title={m.label}
+                  >
+                    <img
+                      src={m.icon}
+                      alt={m.label}
+                      width={22}
+                      height={22}
+                      loading="lazy"
+                      className={`w-[22px] h-[22px] mt-1 transition-all duration-300 ${active ? 'opacity-100' : 'opacity-55'}`}
+                      style={{ filter: 'invert(1) brightness(1.4)' }}
+                    />
+                    <span className="text-[8px] font-display tracking-[0.15em] mb-1">{m.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-
-          {/* Search bar */}
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); setSearchError(''); }}
-              placeholder="Search location…"
-              className="w-80 pl-9 pr-4 py-2 rounded-xl glass-panel bg-card/60 border border-foreground/12 text-[11px] font-display text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-foreground/25 transition-all"
-            />
-            {searchError && (
-              <div className="absolute -top-5 left-0 text-[9px] text-destructive font-mono">{searchError}</div>
-            )}
-          </form>
         </div>
+
+        {/* Compass — bottom-left */}
+        <button
+          onClick={() => {
+            const viewer = (window as any).__cesiumViewer;
+            if (!viewer || viewer.isDestroyed()) return;
+            const carto = viewer.camera.positionCartographic;
+            viewer.camera.flyTo({
+              destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, carto.height),
+              orientation: { heading: 0, pitch: viewer.camera.pitch, roll: 0 },
+              duration: 0.6,
+            });
+          }}
+          title="Reorient to North"
+          className="absolute bottom-20 left-4 z-30 w-14 h-14 rounded-full glass-panel bg-card/70 border border-foreground/15 flex items-center justify-center text-foreground hover:bg-card/90 hover:shadow-[0_0_14px_hsl(0_0%_100%/0.25)] transition-all"
+        >
+          <div className="relative w-10 h-10" style={{ transform: `rotate(${-cameraHeading}deg)`, transition: 'transform 200ms linear' }}>
+            <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] font-display font-bold text-destructive">N</span>
+            <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[8px] font-display text-muted-foreground">E</span>
+            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 text-[8px] font-display text-muted-foreground">S</span>
+            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-[8px] font-display text-muted-foreground">W</span>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-px h-7 bg-foreground/30" />
+          </div>
+        </button>
 
         {/* Coordinate HUD — bottom-left tactical readout */}
         <div className={`absolute bottom-4 left-4 z-30 pointer-events-none font-mono text-[10px] ${hudColor} space-y-0.5`}>

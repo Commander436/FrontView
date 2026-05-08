@@ -125,7 +125,7 @@ interface GlobeViewProps {
   selectedEntity: { type: string; data: any } | null;
   onEntitySelect: (entity: any) => void;
   annotations?: any[];
-  drawingTool?: 'point' | 'line' | 'square' | 'circle' | null;
+  drawingTool?: 'point' | 'line' | 'square' | 'circle' | 'triangle' | 'custom' | null;
   onDrawComplete?: (kind: string, payload: any) => void;
 }
 
@@ -292,7 +292,13 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       }
 
       const icon = getAircraftIcon(a);
-      const newPos = Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, Math.max(a.altitude || 0, 500));
+      // Ground clamp: planes on ground must hug the surface, not float at 500m
+      const altMeters = a.onGround
+        ? 15
+        : (a.baroAltitude != null && a.baroAltitude > 0 ? a.baroAltitude
+          : a.geoAltitude != null && a.geoAltitude > 0 ? a.geoAltitude
+          : a.altitude && a.altitude > 0 ? a.altitude : 15);
+      const newPos = Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, altMeters);
       const existing = aircraftEntities.current.get(a.icao24);
 
       if (existing) {
@@ -1108,7 +1114,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   drawingToolRef.current = drawingTool;
   const onDrawCompleteRef = useRef(onDrawComplete);
   onDrawCompleteRef.current = onDrawComplete;
-  const drawStateRef = useRef<{ first?: { lon: number; lat: number }; preview?: any }>({});
+  const drawStateRef = useRef<{ first?: { lon: number; lat: number }; vertices?: { lon: number; lat: number }[]; preview?: any }>({});
 
   // Render annotations
   useEffect(() => {
@@ -1177,13 +1183,63 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
           properties: props,
         });
       } else if (a.kind === 'circle') {
+        // Build circle outline as a polyline so dashed/dotted styles actually apply.
+        const style = (a as any).style || 'solid';
+        const STEPS = 96;
+        const ring: number[] = [];
+        const R = 6371000;
+        const lat0 = a.center.lat * Math.PI / 180;
+        const lon0 = a.center.lon * Math.PI / 180;
+        const ang = a.radiusMeters / R;
+        for (let i = 0; i <= STEPS; i++) {
+          const brng = (i / STEPS) * 2 * Math.PI;
+          const lat = Math.asin(Math.sin(lat0) * Math.cos(ang) + Math.cos(lat0) * Math.sin(ang) * Math.cos(brng));
+          const lon = lon0 + Math.atan2(Math.sin(brng) * Math.sin(ang) * Math.cos(lat0), Math.cos(ang) - Math.sin(lat0) * Math.sin(lat));
+          ring.push((lon * 180) / Math.PI, (lat * 180) / Math.PI);
+        }
         ds.entities.add({
           id: `ann-${a.id}`,
-          position: Cesium.Cartesian3.fromDegrees(a.center.lon, a.center.lat, 0),
-          ellipse: { semiMajorAxis: a.radiusMeters, semiMinorAxis: a.radiusMeters,
-            material: Cesium.Color.TRANSPARENT, outline: true, outlineColor: c, outlineWidth: 2, height: 0 },
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(ring),
+            width: 2,
+            material: annMaterial(c, style === 'arrow' ? 'solid' : style),
+            clampToGround: true,
+          },
           properties: props,
         });
+      } else if (a.kind === 'triangle') {
+        const style = (a as any).style || 'solid';
+        const v = a.vertices;
+        const ring = [v[0].lon, v[0].lat, v[1].lon, v[1].lat, v[2].lon, v[2].lat, v[0].lon, v[0].lat];
+        ds.entities.add({
+          id: `ann-${a.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(ring),
+            width: 1.8,
+            material: annMaterial(c, style === 'arrow' ? 'solid' : style),
+            clampToGround: true,
+          },
+          properties: props,
+        });
+      } else if (a.kind === 'custom') {
+        const style = (a as any).style || 'solid';
+        const verts = a.vertices;
+        if (verts.length >= 2) {
+          const flat: number[] = [];
+          verts.forEach(p => flat.push(p.lon, p.lat));
+          if (a.closed && verts.length >= 3) flat.push(verts[0].lon, verts[0].lat);
+          ds.entities.add({
+            id: `ann-${a.id}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArray(flat),
+              width: a.closed ? 1.8 : (style === 'arrow' ? 6 : 1.8),
+              material: annMaterial(c, a.closed && style === 'arrow' ? 'solid' : style),
+              arcType: Cesium.ArcType.GEODESIC,
+              clampToGround: a.closed,
+            },
+            properties: props,
+          });
+        }
       }
     });
   }, [annotations]);
@@ -1192,6 +1248,8 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
+    // Reset multi-click state when tool changes
+    drawStateRef.current = {};
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     const pickLonLat = (pos: any): { lon: number; lat: number } | null => {
       const cart = viewer.camera.pickEllipsoid(pos, viewer.scene.globe.ellipsoid);
@@ -1199,10 +1257,27 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       const c = Cesium.Cartographic.fromCartesian(cart);
       return { lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) };
     };
+    // Snap-radius in screen pixels for closing custom/triangle shapes on the first vertex.
+    const SNAP_PX = 14;
+    const lonLatToScreen = (ll: { lon: number; lat: number }) => {
+      const cart = Cesium.Cartesian3.fromDegrees(ll.lon, ll.lat);
+      return viewer.scene.cartesianToCanvasCoordinates(cart);
+    };
+    const isSnappedToFirst = (cursor: any, first: { lon: number; lat: number }) => {
+      const sp = lonLatToScreen(first);
+      if (!sp) return false;
+      const dx = sp.x - cursor.x, dy = sp.y - cursor.y;
+      return Math.hypot(dx, dy) <= SNAP_PX;
+    };
 
     // ---- Ghost preview entity (re-created on demand) ----
     let ghost: any = null;
-    const removeGhost = () => { if (ghost) { viewer.entities.remove(ghost); ghost = null; } };
+    let ghostExtras: any[] = [];
+    const removeGhost = () => {
+      if (ghost) { viewer.entities.remove(ghost); ghost = null; }
+      ghostExtras.forEach(e => viewer.entities.remove(e));
+      ghostExtras = [];
+    };
     const ghostColor = Cesium.Color.WHITE.withAlpha(0.4);
 
     handler.setInputAction((mv: any) => {
@@ -1210,9 +1285,37 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       if (!tool || tool === 'point') { removeGhost(); return; }
       const ll = pickLonLat(mv.endPosition);
       if (!ll) return;
-      const first = drawStateRef.current.first;
-      if (!first) { removeGhost(); return; }
       removeGhost();
+      const first = drawStateRef.current.first;
+      const verts = drawStateRef.current.vertices;
+
+      if (tool === 'triangle' || tool === 'custom') {
+        if (!verts || verts.length === 0) return;
+        // Snap to first vertex when within radius (closing preview)
+        const snap = isSnappedToFirst(mv.endPosition, verts[0]);
+        const cursor = snap ? verts[0] : ll;
+        const flat: number[] = [];
+        verts.forEach(v => flat.push(v.lon, v.lat));
+        flat.push(cursor.lon, cursor.lat);
+        ghost = viewer.entities.add({
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(flat),
+            width: 1.5,
+            material: new Cesium.PolylineDashMaterialProperty({ color: ghostColor, dashLength: 12 }),
+            arcType: Cesium.ArcType.GEODESIC,
+          },
+        });
+        // Vertex dots
+        verts.forEach((v, i) => {
+          ghostExtras.push(viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(v.lon, v.lat, 0),
+            point: { pixelSize: i === 0 && snap ? 10 : 6, color: i === 0 && snap ? Cesium.Color.WHITE : ghostColor, outlineColor: Cesium.Color.BLACK, outlineWidth: 1, disableDepthTestDistance: 0 },
+          }));
+        });
+        return;
+      }
+
+      if (!first) return;
       if (tool === 'line') {
         ghost = viewer.entities.add({
           polyline: {
@@ -1278,8 +1381,40 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
           drawStateRef.current.first = undefined;
           removeGhost();
         }
+      } else if (tool === 'triangle') {
+        const verts = drawStateRef.current.vertices ?? [];
+        verts.push(ll);
+        drawStateRef.current.vertices = verts;
+        if (verts.length >= 3) {
+          onDrawCompleteRef.current?.('triangle', { vertices: verts.slice(0, 3) });
+          drawStateRef.current.vertices = undefined;
+          removeGhost();
+        }
+      } else if (tool === 'custom') {
+        const verts = drawStateRef.current.vertices ?? [];
+        // If snapping to first vertex, close as polygon
+        if (verts.length >= 2 && isSnappedToFirst(click.position, verts[0])) {
+          onDrawCompleteRef.current?.('custom', { vertices: verts, closed: true });
+          drawStateRef.current.vertices = undefined;
+          removeGhost();
+          return;
+        }
+        verts.push(ll);
+        drawStateRef.current.vertices = verts;
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    // Right-click: finish 'custom' as an open line (no closing snap)
+    handler.setInputAction(() => {
+      const tool = drawingToolRef.current;
+      if (tool !== 'custom') return;
+      const verts = drawStateRef.current.vertices;
+      if (verts && verts.length >= 2) {
+        onDrawCompleteRef.current?.('custom', { vertices: verts, closed: false });
+      }
+      drawStateRef.current.vertices = undefined;
+      removeGhost();
+    }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
 
     return () => { removeGhost(); handler.destroy(); drawStateRef.current = {}; };
   }, [drawingTool]);
