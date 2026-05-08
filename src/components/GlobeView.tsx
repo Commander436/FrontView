@@ -292,7 +292,13 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       }
 
       const icon = getAircraftIcon(a);
-      const newPos = Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, Math.max(a.altitude || 0, 500));
+      // Ground clamp: planes on ground must hug the surface, not float at 500m
+      const altMeters = a.onGround
+        ? 15
+        : (a.baroAltitude != null && a.baroAltitude > 0 ? a.baroAltitude
+          : a.geoAltitude != null && a.geoAltitude > 0 ? a.geoAltitude
+          : a.altitude && a.altitude > 0 ? a.altitude : 15);
+      const newPos = Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude, altMeters);
       const existing = aircraftEntities.current.get(a.icao24);
 
       if (existing) {
