@@ -1114,7 +1114,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   drawingToolRef.current = drawingTool;
   const onDrawCompleteRef = useRef(onDrawComplete);
   onDrawCompleteRef.current = onDrawComplete;
-  const drawStateRef = useRef<{ first?: { lon: number; lat: number }; preview?: any }>({});
+  const drawStateRef = useRef<{ first?: { lon: number; lat: number }; vertices?: { lon: number; lat: number }[]; preview?: any }>({});
 
   // Render annotations
   useEffect(() => {
@@ -1248,6 +1248,8 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   useEffect(() => {
     const viewer = viewerRef.current;
     if (!viewer) return;
+    // Reset multi-click state when tool changes
+    drawStateRef.current = {};
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     const pickLonLat = (pos: any): { lon: number; lat: number } | null => {
       const cart = viewer.camera.pickEllipsoid(pos, viewer.scene.globe.ellipsoid);
@@ -1255,10 +1257,27 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       const c = Cesium.Cartographic.fromCartesian(cart);
       return { lon: Cesium.Math.toDegrees(c.longitude), lat: Cesium.Math.toDegrees(c.latitude) };
     };
+    // Snap-radius in screen pixels for closing custom/triangle shapes on the first vertex.
+    const SNAP_PX = 14;
+    const lonLatToScreen = (ll: { lon: number; lat: number }) => {
+      const cart = Cesium.Cartesian3.fromDegrees(ll.lon, ll.lat);
+      return viewer.scene.cartesianToCanvasCoordinates(cart);
+    };
+    const isSnappedToFirst = (cursor: any, first: { lon: number; lat: number }) => {
+      const sp = lonLatToScreen(first);
+      if (!sp) return false;
+      const dx = sp.x - cursor.x, dy = sp.y - cursor.y;
+      return Math.hypot(dx, dy) <= SNAP_PX;
+    };
 
     // ---- Ghost preview entity (re-created on demand) ----
     let ghost: any = null;
-    const removeGhost = () => { if (ghost) { viewer.entities.remove(ghost); ghost = null; } };
+    let ghostExtras: any[] = [];
+    const removeGhost = () => {
+      if (ghost) { viewer.entities.remove(ghost); ghost = null; }
+      ghostExtras.forEach(e => viewer.entities.remove(e));
+      ghostExtras = [];
+    };
     const ghostColor = Cesium.Color.WHITE.withAlpha(0.4);
 
     handler.setInputAction((mv: any) => {
@@ -1266,9 +1285,37 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       if (!tool || tool === 'point') { removeGhost(); return; }
       const ll = pickLonLat(mv.endPosition);
       if (!ll) return;
-      const first = drawStateRef.current.first;
-      if (!first) { removeGhost(); return; }
       removeGhost();
+      const first = drawStateRef.current.first;
+      const verts = drawStateRef.current.vertices;
+
+      if (tool === 'triangle' || tool === 'custom') {
+        if (!verts || verts.length === 0) return;
+        // Snap to first vertex when within radius (closing preview)
+        const snap = isSnappedToFirst(mv.endPosition, verts[0]);
+        const cursor = snap ? verts[0] : ll;
+        const flat: number[] = [];
+        verts.forEach(v => flat.push(v.lon, v.lat));
+        flat.push(cursor.lon, cursor.lat);
+        ghost = viewer.entities.add({
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(flat),
+            width: 1.5,
+            material: new Cesium.PolylineDashMaterialProperty({ color: ghostColor, dashLength: 12 }),
+            arcType: Cesium.ArcType.GEODESIC,
+          },
+        });
+        // Vertex dots
+        verts.forEach((v, i) => {
+          ghostExtras.push(viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(v.lon, v.lat, 0),
+            point: { pixelSize: i === 0 && snap ? 10 : 6, color: i === 0 && snap ? Cesium.Color.WHITE : ghostColor, outlineColor: Cesium.Color.BLACK, outlineWidth: 1, disableDepthTestDistance: 0 },
+          }));
+        });
+        return;
+      }
+
+      if (!first) return;
       if (tool === 'line') {
         ghost = viewer.entities.add({
           polyline: {
