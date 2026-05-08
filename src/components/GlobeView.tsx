@@ -1183,13 +1183,63 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
           properties: props,
         });
       } else if (a.kind === 'circle') {
+        // Build circle outline as a polyline so dashed/dotted styles actually apply.
+        const style = (a as any).style || 'solid';
+        const STEPS = 96;
+        const ring: number[] = [];
+        const R = 6371000;
+        const lat0 = a.center.lat * Math.PI / 180;
+        const lon0 = a.center.lon * Math.PI / 180;
+        const ang = a.radiusMeters / R;
+        for (let i = 0; i <= STEPS; i++) {
+          const brng = (i / STEPS) * 2 * Math.PI;
+          const lat = Math.asin(Math.sin(lat0) * Math.cos(ang) + Math.cos(lat0) * Math.sin(ang) * Math.cos(brng));
+          const lon = lon0 + Math.atan2(Math.sin(brng) * Math.sin(ang) * Math.cos(lat0), Math.cos(ang) - Math.sin(lat0) * Math.sin(lat));
+          ring.push((lon * 180) / Math.PI, (lat * 180) / Math.PI);
+        }
         ds.entities.add({
           id: `ann-${a.id}`,
-          position: Cesium.Cartesian3.fromDegrees(a.center.lon, a.center.lat, 0),
-          ellipse: { semiMajorAxis: a.radiusMeters, semiMinorAxis: a.radiusMeters,
-            material: Cesium.Color.TRANSPARENT, outline: true, outlineColor: c, outlineWidth: 2, height: 0 },
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(ring),
+            width: 2,
+            material: annMaterial(c, style === 'arrow' ? 'solid' : style),
+            clampToGround: true,
+          },
           properties: props,
         });
+      } else if (a.kind === 'triangle') {
+        const style = (a as any).style || 'solid';
+        const v = a.vertices;
+        const ring = [v[0].lon, v[0].lat, v[1].lon, v[1].lat, v[2].lon, v[2].lat, v[0].lon, v[0].lat];
+        ds.entities.add({
+          id: `ann-${a.id}`,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(ring),
+            width: 1.8,
+            material: annMaterial(c, style === 'arrow' ? 'solid' : style),
+            clampToGround: true,
+          },
+          properties: props,
+        });
+      } else if (a.kind === 'custom') {
+        const style = (a as any).style || 'solid';
+        const verts = a.vertices;
+        if (verts.length >= 2) {
+          const flat: number[] = [];
+          verts.forEach(p => flat.push(p.lon, p.lat));
+          if (a.closed && verts.length >= 3) flat.push(verts[0].lon, verts[0].lat);
+          ds.entities.add({
+            id: `ann-${a.id}`,
+            polyline: {
+              positions: Cesium.Cartesian3.fromDegreesArray(flat),
+              width: a.closed ? 1.8 : (style === 'arrow' ? 6 : 1.8),
+              material: annMaterial(c, a.closed && style === 'arrow' ? 'solid' : style),
+              arcType: Cesium.ArcType.GEODESIC,
+              clampToGround: a.closed,
+            },
+            properties: props,
+          });
+        }
       }
     });
   }, [annotations]);
