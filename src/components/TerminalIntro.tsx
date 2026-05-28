@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
-type Phase = 'boot' | 'logo' | 'postlogo' | 'done';
+type Phase = 'welcome' | 'boot' | 'logo' | 'postlogo' | 'done';
 
 interface Line {
   text: string;
@@ -18,32 +18,59 @@ function click() {
     const c = ctx();
     const o = c.createOscillator();
     const g = c.createGain();
-    o.type = 'square';
-    o.frequency.value = 1800 + Math.random() * 400;
-    g.gain.setValueAtTime(0.04, c.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.025);
-    o.connect(g).connect(c.destination);
-    o.start();
-    o.stop(c.currentTime + 0.03);
+    o.type = 'triangle';
+    o.frequency.value = 90 + Math.random() * 30;
+    const t = c.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.06, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 600;
+    o.connect(f).connect(g).connect(c.destination);
+    o.start(t);
+    o.stop(t + 0.06);
   } catch {}
 }
 function bootChime() {
   try {
     const c = ctx();
-    const notes = [261.63, 329.63, 392.0, 523.25];
-    notes.forEach((f, i) => {
-      const o = c.createOscillator();
-      const g = c.createGain();
-      o.type = 'square';
-      o.frequency.value = f;
-      const t = c.currentTime + i * 0.12;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.06, t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
-      o.connect(g).connect(c.destination);
-      o.start(t);
-      o.stop(t + 0.2);
-    });
+    const t0 = c.currentTime;
+    const dur = 0.9;
+    const o1 = c.createOscillator();
+    o1.type = 'sawtooth';
+    o1.frequency.setValueAtTime(55, t0);
+    o1.frequency.linearRampToValueAtTime(45, t0 + dur);
+    const g1 = c.createGain();
+    g1.gain.setValueAtTime(0.0001, t0);
+    g1.gain.exponentialRampToValueAtTime(0.12, t0 + 0.04);
+    g1.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 400;
+    o1.connect(lp).connect(g1).connect(c.destination);
+    o1.start(t0); o1.stop(t0 + dur);
+    const o2 = c.createOscillator();
+    o2.type = 'square';
+    o2.frequency.value = 110;
+    const g2 = c.createGain();
+    g2.gain.setValueAtTime(0.0001, t0);
+    g2.gain.exponentialRampToValueAtTime(0.03, t0 + 0.05);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t0 + dur * 0.8);
+    const lp2 = c.createBiquadFilter();
+    lp2.type = 'lowpass';
+    lp2.frequency.value = 300;
+    o2.connect(lp2).connect(g2).connect(c.destination);
+    o2.start(t0); o2.stop(t0 + dur);
+    const o3 = c.createOscillator();
+    o3.type = 'sine';
+    o3.frequency.setValueAtTime(180, t0);
+    o3.frequency.exponentialRampToValueAtTime(40, t0 + 0.12);
+    const g3 = c.createGain();
+    g3.gain.setValueAtTime(0.18, t0);
+    g3.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
+    o3.connect(g3).connect(c.destination);
+    o3.start(t0); o3.stop(t0 + 0.16);
   } catch {}
 }
 
@@ -75,7 +102,7 @@ interface Props {
 }
 
 export const TerminalIntro = ({ onComplete }: Props) => {
-  const [phase, setPhase] = useState<Phase>('boot');
+  const [phase, setPhase] = useState<Phase>('welcome');
   const [lines, setLines] = useState<Line[]>([]);
   const [cursorVisible, setCursorVisible] = useState(true);
   const cancelledRef = useRef(false);
@@ -86,6 +113,19 @@ export const TerminalIntro = ({ onComplete }: Props) => {
     const id = setInterval(() => setCursorVisible((v) => !v), 500);
     return () => clearInterval(id);
   }, []);
+
+  // Welcome screen — wait for Enter before booting
+  useEffect(() => {
+    if (phase !== 'welcome') return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        try { ctx().resume(); } catch {}
+        setPhase('boot');
+      }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [phase]);
 
   // Auto-scroll
   useEffect(() => {
@@ -237,10 +277,13 @@ export const TerminalIntro = ({ onComplete }: Props) => {
     <div
       className="fixed inset-0 z-[9999] bg-black text-white overflow-hidden"
       style={{
-        fontFamily: '"JetBrains Mono", "Courier New", monospace',
+        background: '#000',
+        fontFamily: '"IBM Plex Mono", "Courier New", monospace',
         fontSize: '14px',
         lineHeight: 1.45,
-      }}
+        WebkitFontSmoothing: 'none',
+        MozOsxFontSmoothing: 'unset',
+      } as React.CSSProperties}
       onClick={() => {
         // Unlock audio on first interaction (some browsers)
         try { ctx().resume(); } catch {}
@@ -254,6 +297,15 @@ export const TerminalIntro = ({ onComplete }: Props) => {
             'repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(255,255,255,0.06) 2px, rgba(255,255,255,0.06) 3px)',
         }}
       />
+
+      {phase === 'welcome' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <div>WELCOME TO FRONTVIEW.</div>
+          <div className="mt-2">
+            Press Enter to continue<span style={{ opacity: cursorVisible ? 1 : 0 }}>_</span>
+          </div>
+        </div>
+      )}
 
       {phase === 'boot' && (
         <div ref={scrollRef} className="absolute inset-0 overflow-hidden px-6 py-5">
