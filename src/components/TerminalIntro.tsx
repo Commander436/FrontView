@@ -1,414 +1,485 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from "react";
 
-type Phase = 'welcome' | 'boot' | 'logo' | 'postlogo' | 'done';
-
-interface Line {
-  text: string;
-  done: boolean;
-}
-
-// ---------- Audio (Web Audio API, no assets) ----------
-let _ctx: AudioContext | null = null;
-function ctx() {
-  if (!_ctx) _ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  return _ctx;
-}
-function click() {
-  try {
-    const c = ctx();
-    const o = c.createOscillator();
-    const g = c.createGain();
-    o.type = 'triangle';
-    o.frequency.value = 90 + Math.random() * 30;
-    const t = c.currentTime;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.06, t + 0.004);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-    const f = c.createBiquadFilter();
-    f.type = 'lowpass';
-    f.frequency.value = 600;
-    o.connect(f).connect(g).connect(c.destination);
-    o.start(t);
-    o.stop(t + 0.06);
-  } catch {}
-}
-function bootChime() {
-  try {
-    const c = ctx();
-    const t0 = c.currentTime;
-    const dur = 0.9;
-    const o1 = c.createOscillator();
-    o1.type = 'sawtooth';
-    o1.frequency.setValueAtTime(55, t0);
-    o1.frequency.linearRampToValueAtTime(45, t0 + dur);
-    const g1 = c.createGain();
-    g1.gain.setValueAtTime(0.0001, t0);
-    g1.gain.exponentialRampToValueAtTime(0.12, t0 + 0.04);
-    g1.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    const lp = c.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 400;
-    o1.connect(lp).connect(g1).connect(c.destination);
-    o1.start(t0); o1.stop(t0 + dur);
-    const o2 = c.createOscillator();
-    o2.type = 'square';
-    o2.frequency.value = 110;
-    const g2 = c.createGain();
-    g2.gain.setValueAtTime(0.0001, t0);
-    g2.gain.exponentialRampToValueAtTime(0.03, t0 + 0.05);
-    g2.gain.exponentialRampToValueAtTime(0.0001, t0 + dur * 0.8);
-    const lp2 = c.createBiquadFilter();
-    lp2.type = 'lowpass';
-    lp2.frequency.value = 300;
-    o2.connect(lp2).connect(g2).connect(c.destination);
-    o2.start(t0); o2.stop(t0 + dur);
-    const o3 = c.createOscillator();
-    o3.type = 'sine';
-    o3.frequency.setValueAtTime(180, t0);
-    o3.frequency.exponentialRampToValueAtTime(40, t0 + 0.12);
-    const g3 = c.createGain();
-    g3.gain.setValueAtTime(0.18, t0);
-    g3.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
-    o3.connect(g3).connect(c.destination);
-    o3.start(t0); o3.stop(t0 + 0.16);
-  } catch {}
-}
-
-// ---------- Helpers ----------
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+type Line = { text: string; key: number };
 
 const MODULES = [
-  '/core/authentication',
-  '/net/packet_sniffer',
-  '/osint/scraper',
-  '/geo/telemetry',
-  '/stream/ingest',
-  '/net/handshake',
-  '/sys/entropy',
-  '/sat/tle_resolver',
-  '/ais/decoder',
-  '/adsb/ingest',
-  '/intel/aggregator',
-  '/crypto/keystore',
-  '/mesh/router',
-  '/dns/resolver',
-  '/cache/lru',
-  '/proc/scheduler',
+  "/core/authentication","/net/packet_sniffer","/osint/scraper","/geo/telemetry",
+  "/stream/ingest","/net/handshake","/sys/entropy","/crypto/keyvault","/proc/daemon",
+  "/intel/feed","/sat/uplink","/dns/resolver","/mem/swap","/audio/decoder",
+  "/sig/intercept","/db/index","/proxy/relay","/cache/purge","/bin/shell",
+  "/sys/kernel_patch","/net/tcp_reassemble","/net/dns_spoof","/intel/darknet_crawl",
+  "/sat/iridium_link","/crypto/aes_unwrap","/crypto/rsa_factor","/sys/microcode",
+  "/sys/ring0_patch","/sig/freq_scan","/sig/burst_decoder","/geo/triangulate",
+  "/geo/sat_overlay","/osint/social_graph","/osint/face_match","/proc/ghost_thread",
+  "/proc/rootkit_inject","/mem/dump_raw","/mem/cold_boot","/db/shard_replica",
+  "/db/index_rebuild","/audio/voiceprint","/audio/ssb_demod","/proxy/onion_relay",
+  "/proxy/multihop","/cache/l2_purge","/bin/payload_drop","/bin/exfil_pipe",
+  "/kernel/syscall_hook","/net/arp_table","/net/route_flush","/net/socket_pool",
+  "/sys/clock_sync","/sys/thermal_probe","/sys/power_mgmt","/intel/keyword_match",
+  "/intel/threat_score","/intel/source_rank","/crypto/sha3_chain","/crypto/curve25519",
+  "/crypto/zero_knowledge","/sat/orbital_calc","/sat/downlink_buffer","/sig/spectrum_sweep",
+  "/sig/morse_decode","/geo/grid_lookup","/geo/altitude_map","/osint/handle_link",
+  "/osint/breach_index","/proc/scheduler","/proc/watchdog","/mem/page_table",
+  "/mem/heap_compact","/db/journal_replay","/db/btree_walk","/audio/spectro",
+  "/audio/loudness","/proxy/socks5","/proxy/dns_tunnel","/cache/warm_load",
+  "/bin/loader","/bin/init",
 ];
-const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
 
-interface Props {
-  onComplete: () => void;
-}
+const NOISE = [
+  "0x7FFE  3A 9B C1 04 EE 12 88 7A   FF 00 21 4D 9E B7 0C 11",
+  "0x7FFF  91 04 22 BC 8E 19 33 7C   1A FE 09 8B 4D 02 7F C3",
+  "0x8000  D2 71 4A 6F 0B C9 5E 38   2A 84 17 EC 6B 90 F1 22",
+  "[ 0.483921] tty1: registered character device",
+  "[ 0.512004] eth0: link up, 1000 Mbps full-duplex",
+  "[ 0.617772] random: crng init done",
+  "[ 0.802113] crypto: self-tests passed",
+  "[ 1.124007] sat: uplink locked @ 1.6GHz",
+  "::: handshake ack 0x4f1c :::",
+  "::: handshake ack 0x9a02 :::",
+  "//// stream sync 88.1% ////",
+  "//// stream sync 97.4% ////",
+  ".... entropy pool: 4096 bits ....",
+  ">>> packet drop 0.02% <<<",
+  ">>> route via 10.13.37.4 <<<",
+];
+
+const rand = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+const audio = { start() {}, key() {}, slash() {} };
+
+type Phase = "intro" | "boot" | "loop" | "ready" | "reveal" | "warning" | "done";
+
+interface Props { onComplete: () => void; }
 
 export const TerminalIntro = ({ onComplete }: Props) => {
-  const [phase, setPhase] = useState<Phase>('welcome');
   const [lines, setLines] = useState<Line[]>([]);
-  const [cursorVisible, setCursorVisible] = useState(true);
-  const cancelledRef = useRef(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [current, setCurrent] = useState("");
+  const [phase, setPhase] = useState<Phase>("intro");
+  const keyRef = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Blinking cursor
-  useEffect(() => {
-    const id = setInterval(() => setCursorVisible((v) => !v), 500);
-    return () => clearInterval(id);
-  }, []);
-
-  // Welcome screen — wait for Enter before booting
-  useEffect(() => {
-    if (phase !== 'welcome') return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        try { ctx().resume(); } catch {}
-        setPhase('boot');
-      }
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [phase]);
-
-  // Auto-scroll
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [lines]);
-
-  // Type a single line char-by-char
-  const typeLine = useCallback(async (text: string, speed = 18) => {
-    setLines((prev) => [...prev, { text: '', done: false }]);
-    for (let i = 1; i <= text.length; i++) {
-      if (cancelledRef.current) return;
-      setLines((prev) => {
-        const next = [...prev];
-        next[next.length - 1] = { text: text.slice(0, i), done: false };
-        return next;
-      });
-      if (text[i - 1] !== ' ') click();
-      await sleep(speed + Math.random() * 12);
-    }
+  const pushLine = useCallback((text: string) => {
     setLines((prev) => {
-      const next = [...prev];
-      next[next.length - 1] = { text, done: true };
-      return next;
+      const next = [...prev, { text, key: keyRef.current++ }];
+      return next.length > 300 ? next.slice(next.length - 300) : next;
     });
   }, []);
 
-  const addInstant = useCallback((text: string) => {
-    setLines((prev) => [...prev, { text, done: true }]);
-  }, []);
+  const typeLine = useCallback(
+    async (text: string, charDelay = 18, sound = true) => {
+      for (let i = 1; i <= text.length; i++) {
+        setCurrent(text.slice(0, i));
+        if (sound && text[i - 1] !== " ") audio.key();
+        await sleep(charDelay + Math.random() * 12);
+      }
+      setCurrent("");
+      pushLine(text);
+    },
+    [pushLine]
+  );
 
-  // ===== Boot sequence =====
   useEffect(() => {
-    if (phase !== 'boot') return;
-    (async () => {
-      await sleep(700);
-      await typeLine('FRONTVIEW SYSTEM BOOT v1.0', 35);
-      await sleep(600);
-      addInstant('');
-
-      const checks = [
-        '> Checking memory........ OK',
-        '> Checking kernel........ OK',
-        '> Checking I/O bus....... OK',
-        '> Checking network....... OK',
-        '> Checking display....... OK',
-      ];
-      for (const c of checks) {
-        await typeLine(c, 14);
-        await sleep(220);
-      }
-      addInstant('');
-
-      // Hacking loop ~6s
-      const end = Date.now() + 6000;
-      while (Date.now() < end && !cancelledRef.current) {
-        const mod = pick(MODULES);
-        await typeLine(`> Loading module: ${mod}`, 6);
-        if (Math.random() < 0.18) {
-          await sleep(150);
-          await typeLine('> Retrying...', 8);
-          await sleep(180);
-        }
-        await sleep(60 + Math.random() * 120);
-        addInstant(`> Loading module: ${mod}  [OK]`);
-        if (Math.random() < 0.12) {
-          addInstant('  ' + '▓▒░'.repeat(8 + Math.floor(Math.random() * 10)));
-        }
-        await sleep(40);
-      }
-
-      addInstant('');
-      await typeLine('SYSTEM STATUS: ONLINE', 22);
-      await sleep(900);
-
-      // Clear & reveal logo
-      setLines([]);
-      await sleep(300);
-      setPhase('logo');
-    })();
-    return () => {
-      cancelledRef.current = true;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Enter") return;
+      if (phase === "intro") { audio.start(); setPhase("boot"); }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
-
-  // ===== Logo phase =====
-  const [glitch, setGlitch] = useState(true);
-  useEffect(() => {
-    if (phase !== 'logo') return;
-    bootChime();
-    const t1 = setTimeout(() => setGlitch(false), 500);
-    const t2 = setTimeout(() => setPhase('postlogo'), 3500);
+    const onClick = () => {
+      if (phase === "intro") { audio.start(); setPhase("boot"); }
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("click", onClick);
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("click", onClick);
     };
   }, [phase]);
 
-  // ===== Post-logo sequence =====
-  const [postStage, setPostStage] = useState<
-    'box-h' | 'box-v' | 'welcome-in' | 'welcome-hold' | 'welcome-out' | 'warning' | 'prompt'
-  >('box-h');
-
   useEffect(() => {
-    if (phase !== 'postlogo') return;
+    if (phase !== "boot") return;
     let cancelled = false;
     (async () => {
-      setPostStage('box-h');
-      await sleep(700);
-      if (cancelled) return;
-      setPostStage('box-v');
-      await sleep(700);
-      if (cancelled) return;
-      setPostStage('welcome-in');
-      await sleep(400);
-      if (cancelled) return;
-      setPostStage('welcome-hold');
-      await sleep(3000);
-      if (cancelled) return;
-      setPostStage('welcome-out');
-      await sleep(400);
-      if (cancelled) return;
-      setPostStage('warning');
-      await sleep(1500);
-      if (cancelled) return;
-      setPostStage('prompt');
+      await sleep(400); if (cancelled) return;
+      await typeLine("FRONTVIEW SYSTEM BOOT v1.0", 45);
+      await sleep(500); pushLine("");
+      const checks = [
+        "> Checking memory........ OK",
+        "> Checking kernel........ OK",
+        "> Checking I/O bus....... OK",
+        "> Checking network....... OK",
+        "> Checking display....... OK",
+      ];
+      for (const c of checks) {
+        if (cancelled) return;
+        await typeLine(c, 16);
+        await sleep(180);
+      }
+      pushLine("");
+      await typeLine("> Initializing module loader...", 20);
+      pushLine("");
+      await sleep(300);
+      if (!cancelled) setPhase("loop");
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
+  }, [phase, pushLine, typeLine]);
+
+  useEffect(() => {
+    if (phase !== "loop") return;
+    let cancelled = false;
+    const start = Date.now();
+    const DURATION = 9000;
+    (async () => {
+      let cycles = 0;
+      while (!cancelled && Date.now() - start < DURATION) {
+        const mod = rand(MODULES);
+        const roll = Math.random();
+        if (roll < 0.1) {
+          pushLine(`> Loading module: ${mod}  [FAILED]`);
+          await sleep(20 + Math.random() * 30);
+          if (cancelled) return;
+          pushLine(`> Retrying...`);
+          await sleep(25 + Math.random() * 40);
+          pushLine(`> Loading module: ${mod}  [OK]`);
+        } else if (roll < 0.25) {
+          pushLine(rand(NOISE));
+          await sleep(4 + Math.random() * 15);
+          pushLine(`> Loading module: ${mod}  [OK]`);
+        } else if (roll < 0.4) {
+          const burst = 5 + Math.floor(Math.random() * 6);
+          for (let i = 0; i < burst; i++) {
+            pushLine(`> Loading module: ${rand(MODULES)}  [OK]`);
+          }
+        } else {
+          pushLine(`> Loading module: ${mod}  [OK]`);
+        }
+        if (Math.random() < 0.08) pushLine("");
+        await sleep(3 + Math.random() * 15);
+        cycles++;
+        if (cycles > 0 && cycles % 40 === 0) {
+          pushLine("> _");
+          await sleep(500);
+          if (cancelled) return;
+        }
+      }
+      if (cancelled) return;
+      pushLine("");
+      await typeLine("SYSTEM STATUS: ONLINE", 30);
+      await sleep(1000);
+      if (!cancelled) setPhase("ready");
+    })();
+    return () => { cancelled = true; };
+  }, [phase, pushLine, typeLine]);
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    let cancelled = false;
+    (async () => {
+      await sleep(500); if (cancelled) return;
+      setLines([]); setCurrent("");
+      await sleep(450);
+      if (!cancelled) setPhase("reveal");
+    })();
+    return () => { cancelled = true; };
   }, [phase]);
 
-  // Enter key handler (only on prompt stage)
   useEffect(() => {
-    if (phase !== 'postlogo' || postStage !== 'prompt') return;
-    const h = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        setPhase('done');
-        onComplete();
-      }
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [phase, postStage, onComplete]);
+    const el = containerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lines, current]);
 
-  if (phase === 'done') return null;
+  const containerClass =
+    "fixed inset-0 z-[9999] bg-black text-white font-mono crt-scanlines crt-vignette overflow-hidden";
+  const fontStyle = {
+    fontFamily: '"Courier New", "Lucida Console", Monaco, monospace',
+    textShadow: "0 0 1px rgba(255,255,255,0.4)",
+  } as const;
 
-  return (
-    <div
-      className="fixed inset-0 z-[9999] bg-black text-white overflow-hidden"
-      style={{
-        background: '#000',
-        fontFamily: '"IBM Plex Mono", "Courier New", monospace',
-        fontSize: '14px',
-        lineHeight: 1.45,
-        WebkitFontSmoothing: 'none',
-        MozOsxFontSmoothing: 'unset',
-      } as React.CSSProperties}
-      onClick={() => {
-        // Unlock audio on first interaction (some browsers)
-        try { ctx().resume(); } catch {}
-      }}
-    >
-      {/* CRT-ish scanlines for subtle vintage feel */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-10"
-        style={{
-          backgroundImage:
-            'repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(255,255,255,0.06) 2px, rgba(255,255,255,0.06) 3px)',
-        }}
-      />
+  if (phase === "done") return null;
 
-      {phase === 'welcome' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <div>WELCOME TO FRONTVIEW.</div>
-          <div className="mt-2">
-            Press Enter to continue<span style={{ opacity: cursorVisible ? 1 : 0 }}>_</span>
+  if (phase === "intro") {
+    return (
+      <main className={containerClass} style={fontStyle}>
+        <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
+          <div className="text-base sm:text-xl tracking-wide">Welcome to FrontView.</div>
+          <div className="mt-4 text-sm sm:text-lg">
+            Press Enter to continue<span className="cursor-blink-inline" />
           </div>
         </div>
-      )}
+      </main>
+    );
+  }
 
-      {phase === 'boot' && (
-        <div ref={scrollRef} className="absolute inset-0 overflow-hidden px-6 py-5">
-          {lines.map((l, i) => (
-            <div key={i} className="whitespace-pre">
-              {l.text}
-              {i === lines.length - 1 && !l.done && (
-                <span style={{ opacity: cursorVisible ? 1 : 0 }}>▌</span>
-              )}
-            </div>
-          ))}
-          {lines.length > 0 && lines[lines.length - 1].done && (
-            <div>
-              <span style={{ opacity: cursorVisible ? 1 : 0 }}>▌</span>
-            </div>
-          )}
-        </div>
-      )}
+  if (phase === "reveal") {
+    return (
+      <main className={containerClass} style={fontStyle}>
+        <RevealScreen onDone={() => setPhase("warning")} />
+      </main>
+    );
+  }
 
-      {phase === 'logo' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <LogoGlitch glitching={glitch} />
-          <div className="mt-6 tracking-[0.4em] text-sm">REALITY. IN REAL TIME.</div>
-        </div>
-      )}
-
-      {phase === 'postlogo' && (
-        <PostLogo stage={postStage} cursorVisible={cursorVisible} />
-      )}
-    </div>
-  );
-};
-
-// ---------- Logo with full-block glitch ----------
-const LOGO_LINES = [
-  '███████╗██████╗  ██████╗ ███╗   ██╗████████╗██╗   ██╗██╗███████╗██╗    ██╗',
-  '██╔════╝██╔══██╗██╔═══██╗████╗  ██║╚══██╔══╝██║   ██║██║██╔════╝██║    ██║',
-  '█████╗  ██████╔╝██║   ██║██╔██╗ ██║   ██║   ██║   ██║██║█████╗  ██║ █╗ ██║',
-  '██╔══╝  ██╔══██╗██║   ██║██║╚██╗██║   ██║   ╚██╗ ██╔╝██║██╔══╝  ██║███╗██║',
-  '██║     ██║  ██║╚██████╔╝██║ ╚████║   ██║    ╚████╔╝ ██║███████╗╚███╔███╔╝',
-  '╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝     ╚═══╝  ╚═╝╚══════╝ ╚══╝╚══╝ ',
-];
-
-const LogoGlitch = ({ glitching }: { glitching: boolean }) => {
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    if (!glitching) return;
-    const id = setInterval(() => setFrame((f) => f + 1), 60);
-    return () => clearInterval(id);
-  }, [glitching]);
-
-  const block = (
-    <pre
-      className="leading-[1.05] text-[10px] sm:text-[12px] md:text-[14px] whitespace-pre m-0"
-    >
-      {LOGO_LINES.join('\n')}
-    </pre>
-  );
-
-  if (!glitching) return <div>{block}</div>;
-
-  const shiftX = (Math.random() - 0.5) * 14;
-  const sliceTop = Math.floor(Math.random() * 60);
-  const sliceHeight = 10 + Math.floor(Math.random() * 20);
-  const sliceShift = (Math.random() - 0.5) * 24;
-  const showBars = frame % 3 === 0;
+  if (phase === "warning") {
+    return (
+      <main className={containerClass} style={fontStyle}>
+        <WarningScreen onDone={() => { setPhase("done"); onComplete(); }} />
+      </main>
+    );
+  }
 
   return (
-    <div className="relative" style={{ transform: `translateX(${shiftX}px)` }}>
-      {/* Ghost layer 1 */}
-      <div className="absolute inset-0 opacity-50" style={{ transform: 'translate(-3px,0)' }}>
-        {block}
-      </div>
-      {/* Ghost layer 2 */}
-      <div className="absolute inset-0 opacity-30" style={{ transform: 'translate(2px,1px)' }}>
-        {block}
-      </div>
-      {/* Main */}
-      <div className="relative">{block}</div>
-      {/* Misaligned slice */}
+    <main className={containerClass} style={fontStyle}>
       <div
-        className="absolute left-0 right-0 overflow-hidden bg-black"
-        style={{
-          top: `${sliceTop}%`,
-          height: `${sliceHeight}%`,
-          transform: `translateX(${sliceShift}px)`,
-        }}
+        ref={containerRef}
+        className="h-screen overflow-hidden p-4 sm:p-8 text-[13px] sm:text-[15px] leading-[1.5]"
       >
-        <div style={{ transform: `translateY(-${sliceTop}%)` }}>{block}</div>
+        {lines.map((l) => (
+          <div key={l.key} className="whitespace-pre-wrap break-words">
+            {l.text || "\u00A0"}
+          </div>
+        ))}
+        {current && (
+          <div className="whitespace-pre-wrap break-words">
+            {current}
+            <span className="cursor-blink-inline" />
+          </div>
+        )}
+        {!current && (
+          <div><span className="cursor-blink-inline" /></div>
+        )}
       </div>
-      {/* Static bars */}
-      {showBars && (
-        <>
-          <div className="absolute left-0 right-0 bg-white/80" style={{ top: '20%', height: '2px' }} />
-          <div className="absolute left-0 right-0 bg-white/40" style={{ top: '70%', height: '1px' }} />
-        </>
-      )}
+    </main>
+  );
+};
+
+const CLEAN_LOGO = String.raw`
+ ███████╗██████╗  ██████╗ ███╗   ██╗████████╗██╗   ██╗██╗███████╗██╗    ██╗
+ ██╔════╝██╔══██╗██╔═══██╗████╗  ██║╚══██╔══╝██║   ██║██║██╔════╝██║    ██║
+ █████╗  ██████╔╝██║   ██║██╔██╗ ██║   ██║   ██║   ██║██║█████╗  ██║ █╗ ██║
+ ██╔══╝  ██╔══██╗██║   ██║██║╚██╗██║   ██║   ╚██╗ ██╔╝██║██╔══╝  ██║███╗██║
+ ██║     ██║  ██║╚██████╔╝██║ ╚████║   ██║    ╚████╔╝ ██║███████╗╚███╔███╔╝
+ ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝     ╚═══╝  ╚═╝╚══════╝ ╚══╝╚══╝ 
+`;
+
+const RevealScreen = ({ onDone }: { onDone: () => void }) => {
+  const [tagline, setTagline] = useState("");
+  const [frame, setFrame] = useState(0);
+  const [stable, setStable] = useState(false);
+  const full = "REALITY. IN REAL TIME.";
+
+  useEffect(() => {
+    const totalDuration = 500;
+    const tickMs = 35;
+    const startTime = Date.now();
+    const id = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed >= totalDuration) {
+        clearInterval(id);
+        setStable(true);
+        return;
+      }
+      setFrame((f) => f + 1);
+    }, tickMs);
+    const t = setTimeout(() => {
+      let i = 0;
+      const id2 = setInterval(() => {
+        i++;
+        setTagline(full.slice(0, i));
+        if (i >= full.length) {
+          clearInterval(id2);
+          setTimeout(() => onDone(), 2000);
+        }
+      }, 70);
+    }, 650);
+    return () => { clearTimeout(t); clearInterval(id); };
+  }, [onDone]);
+
+  const r = Math.random;
+  const showGhosts = !stable && r() < 0.85;
+  const showGhost3 = !stable && r() < 0.5;
+  const ghost1X = (r() * 28 - 14).toFixed(1);
+  const ghost2X = (r() * 28 - 14).toFixed(1);
+  const ghost3X = (r() * 36 - 18).toFixed(1);
+  const mainX = !stable ? (r() * 18 - 9).toFixed(1) : "0";
+  const sliceActive = !stable && r() < 0.85;
+  const sliceTop = Math.floor(r() * 70);
+  const sliceHeight = 6 + Math.floor(r() * 22);
+  const sliceShift = (r() * 60 - 30).toFixed(1);
+  const slice2Active = !stable && r() < 0.7;
+  const slice2Top = Math.floor(r() * 70);
+  const slice2Height = 4 + Math.floor(r() * 18);
+  const slice2Shift = (r() * 50 - 25).toFixed(1);
+  const slice3Active = !stable && r() < 0.55;
+  const slice3Top = Math.floor(r() * 70);
+  const slice3Height = 3 + Math.floor(r() * 14);
+  const slice3Shift = (r() * 44 - 22).toFixed(1);
+  const fragmentActive = !stable && r() < 0.5;
+  const fragmentTop = Math.floor(r() * 80);
+  const fragmentHeight = 3 + Math.floor(r() * 10);
+  const whiteFlashActive = !stable && r() < 0.35;
+  const whiteFlashTop = Math.floor(r() * 80);
+  const whiteFlashHeight = 2 + Math.floor(r() * 8);
+  const staticBarActive = !stable && r() < 0.55;
+  const staticBarTop = Math.floor(r() * 90);
+  const staticBarHeight = 2 + Math.floor(r() * 8);
+  const staticBar2Active = !stable && r() < 0.4;
+  const staticBar2Top = Math.floor(r() * 90);
+  const staticBar2Height = 2 + Math.floor(r() * 6);
+
+  const logoPre = (extraStyle: React.CSSProperties = {}) => (
+    <pre
+      className="text-white text-[10px] sm:text-base md:text-lg leading-tight select-none m-0"
+      style={{ textShadow: "0 0 2px rgba(255,255,255,0.5)", ...extraStyle }}
+      aria-label="FRONTVIEW"
+    >{CLEAN_LOGO}</pre>
+  );
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-4">
+      <div key={frame} className="relative inline-block" style={{ transform: `translateX(${mainX}px)` }}>
+        {showGhosts && (
+          <>
+            <div className="absolute inset-0 pointer-events-none" style={{ transform: `translateX(${ghost1X}px)`, opacity: 0.55 }} aria-hidden="true">{logoPre()}</div>
+            <div className="absolute inset-0 pointer-events-none" style={{ transform: `translateX(${ghost2X}px)`, opacity: 0.45 }} aria-hidden="true">{logoPre()}</div>
+          </>
+        )}
+        {showGhost3 && (
+          <div className="absolute inset-0 pointer-events-none" style={{ transform: `translateX(${ghost3X}px)`, opacity: 0.35 }} aria-hidden="true">{logoPre()}</div>
+        )}
+        {logoPre()}
+        {sliceActive && (
+          <div className="absolute left-0 right-0 overflow-hidden pointer-events-none" style={{ top: `${sliceTop}%`, height: `${sliceHeight}%`, transform: `translateX(${sliceShift}px)`, background: "#000" }} aria-hidden="true">
+            <div style={{ marginTop: `-${sliceTop}%` }}>{logoPre()}</div>
+          </div>
+        )}
+        {slice2Active && (
+          <div className="absolute left-0 right-0 overflow-hidden pointer-events-none" style={{ top: `${slice2Top}%`, height: `${slice2Height}%`, transform: `translateX(${slice2Shift}px)`, background: "#000" }} aria-hidden="true">
+            <div style={{ marginTop: `-${slice2Top}%` }}>{logoPre()}</div>
+          </div>
+        )}
+        {slice3Active && (
+          <div className="absolute left-0 right-0 overflow-hidden pointer-events-none" style={{ top: `${slice3Top}%`, height: `${slice3Height}%`, transform: `translateX(${slice3Shift}px)`, background: "#000" }} aria-hidden="true">
+            <div style={{ marginTop: `-${slice3Top}%` }}>{logoPre()}</div>
+          </div>
+        )}
+        {fragmentActive && (
+          <div className="absolute left-0 right-0 overflow-hidden pointer-events-none" style={{ top: `${fragmentTop}%`, height: `${fragmentHeight}%`, background: "#000", mixBlendMode: "screen" }} aria-hidden="true">
+            <div style={{ marginTop: `-${fragmentTop}%` }}>{logoPre({ filter: "brightness(1.6)" })}</div>
+          </div>
+        )}
+        {whiteFlashActive && (
+          <div className="absolute left-0 right-0 overflow-hidden pointer-events-none" style={{ top: `${whiteFlashTop}%`, height: `${whiteFlashHeight}%`, background: "#000" }} aria-hidden="true">
+            <div style={{ marginTop: `-${whiteFlashTop}%` }}>{logoPre({ filter: "brightness(3)", color: "#fff" })}</div>
+          </div>
+        )}
+        {staticBarActive && (
+          <div className="absolute left-0 right-0 pointer-events-none" style={{ top: `${staticBarTop}%`, height: `${staticBarHeight}%`, background: "repeating-linear-gradient(to right, #fff 0 2px, #000 2px 4px, #fff 4px 7px, #000 7px 11px)", opacity: 0.95 }} aria-hidden="true" />
+        )}
+        {staticBar2Active && (
+          <div className="absolute left-0 right-0 pointer-events-none" style={{ top: `${staticBar2Top}%`, height: `${staticBar2Height}%`, background: "repeating-linear-gradient(to right, #fff 0 1px, #000 1px 3px, #fff 3px 5px, #000 5px 9px)", opacity: 0.9 }} aria-hidden="true" />
+        )}
+      </div>
+      <div className="mt-8 sm:mt-12 font-mono text-sm sm:text-lg tracking-[0.3em] min-h-[1.5em]">
+        {tagline}
+        {tagline.length < full.length && <span className="cursor-blink-inline" />}
+      </div>
     </div>
   );
 };
 
-// ---------- Post-logo box + welcome + warning ----------
-const WARNING_TEXT = `WARNING!
+const WarningScreen = ({ onDone }: { onDone: () => void }) => {
+  const [boxW, setBoxW] = useState(0);
+  const [boxH, setBoxH] = useState(0);
+  const [welcomeOpacity, setWelcomeOpacity] = useState(0);
+  const [warningOpacity, setWarningOpacity] = useState(0);
+  const [promptOpacity, setPromptOpacity] = useState(0);
+  const [readyForEnter, setReadyForEnter] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const targetW = 820;
+  const targetH = 560;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await sleep(400); if (cancelled) return;
+      const stepsW = 24;
+      for (let i = 1; i <= stepsW; i++) {
+        if (cancelled) return;
+        setBoxW(Math.round((targetW * i) / stepsW));
+        await sleep(18);
+      }
+      const stepsH = 18;
+      for (let i = 1; i <= stepsH; i++) {
+        if (cancelled) return;
+        setBoxH(Math.round((targetH * i) / stepsH));
+        await sleep(20);
+      }
+      await sleep(250); if (cancelled) return;
+      const fadeSteps = 10;
+      for (let i = 1; i <= fadeSteps; i++) {
+        if (cancelled) return;
+        setWelcomeOpacity(i / fadeSteps);
+        await sleep(30);
+      }
+      await sleep(3000); if (cancelled) return;
+      for (let i = fadeSteps; i >= 0; i--) {
+        if (cancelled) return;
+        setWelcomeOpacity(i / fadeSteps);
+        await sleep(30);
+      }
+      await sleep(300); if (cancelled) return;
+      for (let i = 1; i <= fadeSteps; i++) {
+        if (cancelled) return;
+        setWarningOpacity(i / fadeSteps);
+        await sleep(40);
+      }
+      await sleep(3000); if (cancelled) return;
+      for (let i = 1; i <= fadeSteps; i++) {
+        if (cancelled) return;
+        setPromptOpacity(i / fadeSteps);
+        await sleep(40);
+      }
+      if (!cancelled) setReadyForEnter(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const onKey = async (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || !readyForEnter || exiting) return;
+      setExiting(true);
+      const fadeSteps = 10;
+      for (let i = fadeSteps; i >= 0; i--) {
+        setPromptOpacity(i / fadeSteps);
+        setWarningOpacity(i / fadeSteps);
+        await sleep(25);
+      }
+      await sleep(120);
+      const stepsH = 16;
+      for (let i = stepsH - 1; i >= 0; i--) {
+        setBoxH(Math.round((targetH * i) / stepsH));
+        await sleep(18);
+      }
+      const stepsW = 20;
+      for (let i = stepsW - 1; i >= 0; i--) {
+        setBoxW(Math.round((targetW * i) / stepsW));
+        await sleep(14);
+      }
+      await sleep(120);
+      onDone();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [readyForEnter, exiting, onDone]);
+
+  return (
+    <div className="min-h-screen w-full bg-black flex items-center justify-center px-4">
+      <div className="relative border border-white" style={{ width: `${boxW}px`, height: `${boxH}px`, maxWidth: "92vw", maxHeight: "82vh", transition: "none" }}>
+        <div className="absolute inset-0 flex items-center justify-center text-center font-mono text-white text-2xl sm:text-4xl tracking-widest pointer-events-none" style={{ opacity: welcomeOpacity }}>
+          WELCOME, USER.
+        </div>
+        {warningOpacity > 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 py-6 text-center font-mono text-white overflow-auto" style={{ opacity: warningOpacity }}>
+            <div className="text-[10px] sm:text-xs leading-relaxed max-w-[92%] whitespace-pre-line">
+{`WARNING!
 
 FrontView operates on live, volatile data streams. Street-level traffic indicators may appear distorted, delayed, or incomplete due to environmental interference, signal degradation, or third-party limitations. Interpret all movement data as approximate.
 
@@ -417,6 +488,7 @@ DISCLAIMER!
 Accessing or operating FrontView for any of the following purposes is strictly forbidden and will be treated as a breach of system policy:
 
 • Mass surveillance or population monitoring.
+
 • Military planning, targeting, or strategic operations.
 
 Any attempt to repurpose FrontView beyond its intended civilian intelligence visualization may trigger the notification of proper authorities.
@@ -427,52 +499,14 @@ Session integrity is not guaranteed.
 
 © FRONTIER STUDIOS GAMES — ALL RIGHTS RESERVED
 
-Unauthorized duplication, modification, or extraction of system components is prohibited.`;
-
-const PostLogo = ({
-  stage,
-  cursorVisible,
-}: {
-  stage: 'box-h' | 'box-v' | 'welcome-in' | 'welcome-hold' | 'welcome-out' | 'warning' | 'prompt';
-  cursorVisible: boolean;
-}) => {
-  const boxOpen = stage !== 'box-h' && stage !== 'box-v' ? true : stage === 'box-v';
-  const showBox = stage !== 'warning' && stage !== 'prompt';
-  const welcomeOpacity =
-    stage === 'welcome-in' || stage === 'welcome-hold' ? 1 : 0;
-
-  return (
-    <div className="absolute inset-0 flex items-center justify-center">
-      {showBox && (
-        <div
-          className="relative border border-white transition-all duration-[600ms] ease-out"
-          style={{
-            width: stage === 'box-h' ? '12px' : '70%',
-            height: boxOpen ? '60%' : '12px',
-            maxWidth: '900px',
-            maxHeight: '500px',
-          }}
-        >
-          <div
-            className="absolute left-0 right-0 top-6 text-center transition-opacity duration-300"
-            style={{ opacity: welcomeOpacity }}
-          >
-            WELCOME, USER.
-          </div>
-        </div>
-      )}
-
-      {(stage === 'warning' || stage === 'prompt') && (
-        <div className="px-6 max-w-[760px] w-full text-center whitespace-pre-wrap">
-          {WARNING_TEXT}
-          {stage === 'prompt' && (
-            <div className="mt-8">
-              Press Enter to continue
-              <span style={{ opacity: cursorVisible ? 1 : 0 }}>_</span>
+Unauthorized duplication, modification, or extraction of system components is prohibited.`}
             </div>
-          )}
-        </div>
-      )}
+            <div className="mt-6 text-xs sm:text-sm tracking-wider" style={{ opacity: promptOpacity }}>
+              Press Enter to continue<span className="cursor-blink-inline" />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
