@@ -60,6 +60,9 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
 
+  // Play intro entry animations only on first mount (i.e. right after the terminal intro)
+  const [introAnim] = useState(true);
+
   // Keep the selected annotation in sync with edits (rename/style/icon/color)
   useEffect(() => {
     if (selectedEntity?.type !== 'annotation') return;
