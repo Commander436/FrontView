@@ -294,6 +294,20 @@ function renderDetails(entity: SelectedEntity) {
         </>
       );
     }
+    case 'building': {
+      const b = d as { name: string; buildingType: string; height: string; address: string; operator: string; constructionYear: string };
+      return (
+        <>
+          <SectionHeader label="Building Intelligence" />
+          <InfoRow label="Name" value={b.name} highlight />
+          <InfoRow label="Building Type" value={b.buildingType} />
+          <InfoRow label="Height" value={b.height} />
+          <InfoRow label="Address" value={b.address} />
+          <InfoRow label="Operator / Owner" value={b.operator} />
+          <InfoRow label="Construction Year" value={b.constructionYear} />
+        </>
+      );
+    }
   }
 }
 
