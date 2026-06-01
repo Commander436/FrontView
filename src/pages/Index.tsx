@@ -60,6 +60,9 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
 
+  // Play intro entry animations only on first mount (i.e. right after the terminal intro)
+  const [introAnim] = useState(true);
+
   // Keep the selected annotation in sync with edits (rename/style/icon/color)
   useEffect(() => {
     if (selectedEntity?.type !== 'annotation') return;
@@ -185,6 +188,7 @@ const Index = () => {
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-background">
+      <div className={introAnim ? 'intro-left-in flex' : 'flex'}>
       <LeftPanel
         layers={layers}
         onToggleLayer={toggleLayer}
@@ -200,9 +204,10 @@ const Index = () => {
         annotationCount={annotations.length}
         onClearAllAnnotations={clearAll}
       />
+      </div>
       <main className="flex-1 relative min-w-0">
         <div
-          className="w-full h-full"
+          className={`w-full h-full ${introAnim ? 'intro-globe-in' : ''}`}
           style={{
             filter: globeFilter,
             transition: 'filter 700ms cubic-bezier(0.22, 1, 0.36, 1)',
@@ -225,7 +230,7 @@ const Index = () => {
         {showScope && <ScopeOverlay mode={displayMode === 'normal' ? 'scope-only' : displayMode} />}
 
         {/* Unified bottom-center tactical dock */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
+        <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-30 ${introAnim ? 'intro-bottom-in' : ''}`}>
           <div className="flex flex-col items-stretch gap-2 p-2.5 rounded-2xl glass-panel bg-card/70 border border-foreground/15 shadow-[0_10px_40px_rgba(0,0,0,0.55)] backdrop-blur-md">
             {/* Search bar */}
             <form onSubmit={handleSearch} className="relative">
@@ -273,7 +278,7 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Compass — bottom-left */}
+        {/* Compass — bottom-right */}
         <button
           onClick={() => {
             const viewer = (window as any).__cesiumViewer;
@@ -286,19 +291,50 @@ const Index = () => {
             });
           }}
           title="Reorient to North"
-          className="absolute bottom-20 left-4 z-30 w-14 h-14 rounded-full glass-panel bg-card/70 border border-foreground/15 flex items-center justify-center text-foreground hover:bg-card/90 hover:shadow-[0_0_14px_hsl(0_0%_100%/0.25)] transition-all"
+          className={`absolute bottom-6 right-6 z-30 w-20 h-20 rounded-full glass-panel bg-card/70 border border-foreground/20 flex items-center justify-center text-foreground hover:bg-card/90 hover:shadow-[0_0_18px_hsl(0_0%_100%/0.3)] transition-all group ${introAnim ? 'intro-hud-in' : ''}`}
         >
-          <div className="relative w-10 h-10" style={{ transform: `rotate(${-cameraHeading}deg)`, transition: 'transform 200ms linear' }}>
-            <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] font-display font-bold text-destructive">N</span>
-            <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[8px] font-display text-muted-foreground">E</span>
-            <span className="absolute bottom-0 left-1/2 -translate-x-1/2 text-[8px] font-display text-muted-foreground">S</span>
-            <span className="absolute left-0 top-1/2 -translate-y-1/2 text-[8px] font-display text-muted-foreground">W</span>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-px h-7 bg-foreground/30" />
+          {/* Outer fixed ring with tick marks */}
+          <div className="absolute inset-0 rounded-full pointer-events-none">
+            {Array.from({ length: 36 }).map((_, i) => (
+              <div
+                key={i}
+                className="absolute left-1/2 top-1/2 origin-top"
+                style={{
+                  transform: `translate(-50%, 0) rotate(${i * 10}deg) translateY(-38px)`,
+                  width: i % 9 === 0 ? '2px' : '1px',
+                  height: i % 9 === 0 ? '7px' : i % 3 === 0 ? '5px' : '3px',
+                  background: i % 9 === 0 ? 'hsl(var(--foreground) / 0.85)' : 'hsl(var(--foreground) / 0.35)',
+                }}
+              />
+            ))}
+          </div>
+          {/* Rotating compass face */}
+          <div
+            className="relative w-16 h-16"
+            style={{ transform: `rotate(${-cameraHeading}deg)`, transition: 'transform 180ms linear' }}
+          >
+            {/* Cardinal labels rotate with face */}
+            <span className="absolute top-[2px] left-1/2 -translate-x-1/2 text-[10px] font-display font-bold text-destructive tracking-wider">N</span>
+            <span className="absolute right-[2px] top-1/2 -translate-y-1/2 text-[8px] font-display text-foreground/70">E</span>
+            <span className="absolute bottom-[2px] left-1/2 -translate-x-1/2 text-[8px] font-display text-foreground/70">S</span>
+            <span className="absolute left-[2px] top-1/2 -translate-y-1/2 text-[8px] font-display text-foreground/70">W</span>
+            {/* Needle */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center" style={{ height: '44px' }}>
+              <div style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderBottom: '14px solid hsl(var(--destructive))' }} />
+              <div style={{ width: '2px', height: '14px', background: 'hsl(var(--foreground) / 0.55)' }} />
+              <div style={{ width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '10px solid hsl(var(--foreground) / 0.7)' }} />
+            </div>
+            {/* Center hub */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-foreground/80 ring-1 ring-background" />
+          </div>
+          {/* Heading readout */}
+          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] font-mono text-foreground/70 tracking-widest tabular-nums">
+            {String(Math.round((cameraHeading + 360) % 360)).padStart(3, '0')}°
           </div>
         </button>
 
         {/* Coordinate HUD — bottom-left tactical readout */}
-        <div className={`absolute bottom-4 left-4 z-30 pointer-events-none font-mono text-[10px] ${hudColor} space-y-0.5`}>
+        <div className={`absolute bottom-4 left-4 z-30 pointer-events-none font-mono text-[10px] ${hudColor} space-y-0.5 ${introAnim ? 'intro-hud-in' : ''}`}>
           <div>LAT {cameraCoords.lat >= 0 ? 'N' : 'S'}{Math.abs(cameraCoords.lat).toFixed(4)}°</div>
           <div>LON {cameraCoords.lon >= 0 ? 'E' : 'W'}{Math.abs(cameraCoords.lon).toFixed(4)}°</div>
           <div className="opacity-60">MGRS {toMGRS(cameraCoords.lat, cameraCoords.lon)}</div>

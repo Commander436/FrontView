@@ -180,3 +180,25 @@
   background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.7) 100%);
   z-index: 1;
 }
+
+/* Intro → globe handoff transitions */
+@keyframes globe-fade-in {
+  from { opacity: 0; filter: brightness(0.4) blur(6px); }
+  to   { opacity: 1; filter: brightness(1) blur(0); }
+}
+@keyframes slide-in-left-panel {
+  from { transform: translateX(-110%); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes slide-in-bottom-dock {
+  from { transform: translate(-50%, 140%); opacity: 0; }
+  to   { transform: translate(-50%, 0);    opacity: 1; }
+}
+@keyframes fade-in-soft {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.intro-globe-in   { animation: globe-fade-in 1500ms cubic-bezier(0.22,1,0.36,1) both; }
+.intro-left-in    { animation: slide-in-left-panel 800ms cubic-bezier(0.22,1,0.36,1) 350ms both; }
+.intro-bottom-in  { animation: slide-in-bottom-dock 800ms cubic-bezier(0.22,1,0.36,1) 600ms both; }
+.intro-hud-in     { animation: fade-in-soft 900ms ease-out 900ms both; }
