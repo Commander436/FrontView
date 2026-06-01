@@ -980,6 +980,20 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
             if (!el.geometry || el.geometry.length < 3) return;
             const coords = el.geometry.flatMap((nd: any) => [nd.lon, nd.lat]);
             const h = el.tags?.height ? parseFloat(el.tags.height) : el.tags?.['building:levels'] ? parseFloat(el.tags['building:levels']) * 3.5 : 15;
+            const t = el.tags || {};
+            const buildingData = {
+              name: t.name || 'Unknown',
+              buildingType: t.building && t.building !== 'yes' ? t.building : 'Unknown',
+              height: t.height
+                ? `${parseFloat(t.height)} m`
+                : t['building:levels']
+                  ? `${parseFloat(t['building:levels']) * 3} m (est.)`
+                  : 'Unknown',
+              address: [t['addr:housenumber'], t['addr:street'], t['addr:city'], t['addr:postcode']]
+                .filter(Boolean).join(', ') || 'Unknown',
+              operator: t.operator || t.owner || 'Unknown',
+              constructionYear: t.start_date || 'Unknown',
+            };
             ds.entities.add({
               polygon: {
                 hierarchy: Cesium.Cartesian3.fromDegreesArray(coords),
@@ -987,6 +1001,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
                 material: Cesium.Color.fromCssColorString(bColor),
                 outline: true, outlineColor: Cesium.Color.fromCssColorString(oColor), outlineWidth: 1,
               },
+              properties: { entityType: 'building', entityData: JSON.stringify(buildingData) },
             });
           });
         } catch (err) { console.warn('Buildings fetch failed:', err); }
