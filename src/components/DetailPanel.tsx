@@ -63,6 +63,7 @@ function getIcon(type: string) {
     case 'gps_interference': return <SignalZero className={cls} />;
     case 'internet_blackout': return <WifiOff className={cls} />;
     case 'airspace_closure': return <ShieldAlert className={cls} />;
+    case 'building': return <Building2 className={cls} />;
     default: return null;
   }
 }
@@ -80,6 +81,7 @@ function getTitle(entity: SelectedEntity): string {
     case 'gps_interference': return (d as GPSInterferenceZone).name;
     case 'internet_blackout': return `${(d as InternetBlackout).country} Blackout`;
     case 'airspace_closure': return (d as AirspaceClosure).name;
+    case 'building': return (d as any).name || 'Building';
     default: return 'Unknown';
   }
 }
@@ -289,6 +291,20 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Source" value={ac.source} />
           <SectionHeader label="Airspace Intel" color="text-rose-400" />
           <p className="text-muted-foreground text-[9px] leading-relaxed whitespace-pre-line">{ac.description}</p>
+        </>
+      );
+    }
+    case 'building': {
+      const b = d as { name: string; buildingType: string; height: string; address: string; operator: string; constructionYear: string };
+      return (
+        <>
+          <SectionHeader label="Building Intelligence" />
+          <InfoRow label="Name" value={b.name} highlight />
+          <InfoRow label="Building Type" value={b.buildingType} />
+          <InfoRow label="Height" value={b.height} />
+          <InfoRow label="Address" value={b.address} />
+          <InfoRow label="Operator / Owner" value={b.operator} />
+          <InfoRow label="Construction Year" value={b.constructionYear} />
         </>
       );
     }

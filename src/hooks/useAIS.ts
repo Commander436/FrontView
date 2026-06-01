@@ -21,16 +21,10 @@ export function useAIS(enabled: boolean) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const logTimer = useRef<ReturnType<typeof setInterval>>();
-  const failCount = useRef(0);
   const zeroShipTicks = useRef(0);
 
   const connect = useCallback(() => {
     if (!enabled) return;
-    if (failCount.current >= 3) {
-      setError('AIS disabled (no working AIS endpoint configured).');
-      setLoading(false);
-      return;
-    }
     setLoading(true);
 
     try {
@@ -41,10 +35,8 @@ export function useAIS(enabled: boolean) {
         setWsConnected(true);
         setError(null);
         setLoading(false);
-        failCount.current = 0;
         zeroShipTicks.current = 0;
-        console.log('[AIS] WebSocket connected: true');
-        // Try connecting without a key — AISStream may accept or reject
+        console.log('[AIS] Connected to free community stream');
         ws.send(JSON.stringify({
           APIKey: "",
           BoundingBoxes: [[[-90, -180], [90, 180]]],
@@ -80,30 +72,21 @@ export function useAIS(enabled: boolean) {
       };
 
       ws.onerror = () => {
-        console.warn('[AIS] WebSocket error');
+        console.warn('[AIS ERROR] WebSocket error');
         setWsConnected(false);
-        ws.close();
       };
 
       ws.onclose = () => {
         setWsConnected(false);
         wsRef.current = null;
-        failCount.current++;
-        console.log('[AIS] WebSocket connected: false');
-
-        if (failCount.current >= 3) {
-          setError('AIS disabled (no working AIS endpoint configured).');
-          setLoading(false);
-        } else if (enabled) {
-          const delay = 10000 * Math.pow(2, failCount.current - 1);
-          reconnectTimer.current = setTimeout(connect, delay);
+        console.warn('[AIS] Connection closed — retrying in 5 seconds');
+        if (enabled) {
+          reconnectTimer.current = setTimeout(connect, 5000);
         }
       };
     } catch {
       setWsConnected(false);
-      failCount.current++;
-      setError('AIS disabled (no working AIS endpoint configured).');
-      setLoading(false);
+      if (enabled) reconnectTimer.current = setTimeout(connect, 5000);
     }
   }, [enabled]);
 
@@ -128,20 +111,15 @@ export function useAIS(enabled: boolean) {
     logTimer.current = setInterval(() => {
       const connected = wsRef.current?.readyState === WebSocket.OPEN;
       const count = shipMapRef.current.size;
-      console.log(`[AIS] Connected: ${connected}`);
-      console.log(`[AIS] Live ship count: ${count}`);
+      console.log(`[AIS] Live ships: ${count} (connected: ${connected})`);
 
       if (connected && count === 0) {
         zeroShipTicks.current++;
         if (zeroShipTicks.current >= 3) {
-          console.error('[AIS ERROR] Connected but no ships — check parsing/filtering, do not assume "no traffic".');
+          console.error('[AIS ERROR] Connected but no ships — check parsing, not endpoint');
         }
       } else {
         zeroShipTicks.current = 0;
-      }
-
-      if (count > 0 && count < 50) {
-        console.warn('[AIS ERROR] Demo AIS detected — remove all fallback sources.');
       }
     }, 10000);
     return () => { if (logTimer.current) clearInterval(logTimer.current); };
@@ -152,7 +130,6 @@ export function useAIS(enabled: boolean) {
       setShips([]);
       shipMapRef.current.clear();
       setWsConnected(false);
-      failCount.current = 0;
       zeroShipTicks.current = 0;
       if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
