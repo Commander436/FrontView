@@ -63,6 +63,7 @@ function getIcon(type: string) {
     case 'gps_interference': return <SignalZero className={cls} />;
     case 'internet_blackout': return <WifiOff className={cls} />;
     case 'airspace_closure': return <ShieldAlert className={cls} />;
+    case 'building': return <Building2 className={cls} />;
     default: return null;
   }
 }
@@ -80,6 +81,7 @@ function getTitle(entity: SelectedEntity): string {
     case 'gps_interference': return (d as GPSInterferenceZone).name;
     case 'internet_blackout': return `${(d as InternetBlackout).country} Blackout`;
     case 'airspace_closure': return (d as AirspaceClosure).name;
+    case 'building': return (d as any).name || 'Building';
     default: return 'Unknown';
   }
 }
