@@ -2,13 +2,19 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Ship } from '@/types/globe';
 
 const AIS_WS_URL = 'wss://stream.aisstream.io/v0/stream';
+// AISStream.io requires a per-user API key for the public WebSocket.
+// Browser-side WS auth requires the key on the client; Vite env var lets us
+// keep it out of the source tree (set VITE_AISSTREAM_KEY in .env.local).
+const AIS_API_KEY: string =
+  (import.meta.env.VITE_AISSTREAM_KEY as string) ||
+  'e004e4bda671b27715aaf6b2ca33d22420a73ce7';
 
 function classifyShipType(typeNum: number): Ship['type'] {
   if (typeNum >= 70 && typeNum <= 79) return 'cargo';
   if (typeNum >= 80 && typeNum <= 89) return 'tanker';
   if (typeNum >= 60 && typeNum <= 69) return 'passenger';
+  if (typeNum >= 35 && typeNum <= 38) return 'military';
   if (typeNum >= 30 && typeNum <= 39) return 'fishing';
-  if (typeNum === 35 || typeNum === 55) return 'military';
   return 'cargo';
 }
 
@@ -36,27 +42,42 @@ export function useAIS(enabled: boolean) {
         setError(null);
         setLoading(false);
         zeroShipTicks.current = 0;
-        console.log('[AIS] Connected to free community stream');
+        console.log('[AIS] Connected to AISStream.io');
         ws.send(JSON.stringify({
-          APIKey: "",
+          APIKey: AIS_API_KEY,
           BoundingBoxes: [[[-90, -180], [90, 180]]],
-          FilterMessageTypes: ['PositionReport'],
+          FilterMessageTypes: ['PositionReport', 'ShipStaticData'],
         }));
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          const report = msg.Message?.PositionReport;
           const meta = msg.MetaData;
-          if (!report || !meta) return;
-
+          if (!meta) return;
           const mmsi = String(meta.MMSI || '');
           if (!mmsi) return;
+
+          // Static data updates (destination, ship name/type)
+          const staticData = msg.Message?.ShipStaticData;
+          if (staticData) {
+            const existing = shipMapRef.current.get(mmsi);
+            const dest = (staticData.Destination || '').trim();
+            if (existing) {
+              if (dest) existing.destination = dest;
+              if (staticData.Type) existing.type = classifyShipType(staticData.Type);
+              if (staticData.Name) existing.name = staticData.Name.trim() || existing.name;
+            }
+            return;
+          }
+
+          const report = msg.Message?.PositionReport;
+          if (!report || !meta) return;
           const lat = report.Latitude;
           const lon = report.Longitude;
           if (lat == null || lon == null || lat === 91 || lon === 181) return;
 
+          const prev = shipMapRef.current.get(mmsi);
           const ship: Ship = {
             mmsi,
             name: (meta.ShipName || '').trim() || `VESSEL-${mmsi.slice(-4)}`,
@@ -66,6 +87,7 @@ export function useAIS(enabled: boolean) {
             speed: report.Sog || 0,
             course: report.Cog || 0,
             lastUpdate: meta.time_utc || new Date().toISOString(),
+            destination: prev?.destination,
           };
           shipMapRef.current.set(mmsi, ship);
         } catch { /* skip malformed */ }
