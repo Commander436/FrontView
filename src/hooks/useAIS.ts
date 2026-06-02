@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Ship } from '@/types/globe';
 
-const AIS_WS_URL = 'wss://stream.aisstream.io/v0/stream';
+const AIS_WS_URL = 'https://frontview-l8t7.onrender.com';
 // AISStream.io requires a per-user API key for the public WebSocket.
 // Browser-side WS auth requires the key on the client; Vite env var lets us
 // keep it out of the source tree (set VITE_AISSTREAM_KEY in .env.local).
