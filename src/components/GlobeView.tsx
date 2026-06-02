@@ -438,6 +438,16 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       currentIds.add(s.mmsi);
       shipLastSeen.current.set(s.mmsi, nowMs);
 
+      // Maintain 20-minute trail history per ship
+      const trail = shipTrails.current.get(s.mmsi) || [];
+      const last = trail[trail.length - 1];
+      if (!last || last.lat !== s.latitude || last.lon !== s.longitude) {
+        trail.push({ time: nowMs, lat: s.latitude, lon: s.longitude });
+      }
+      const cutoff = nowMs - 20 * 60 * 1000;
+      while (trail.length && trail[0].time < cutoff) trail.shift();
+      shipTrails.current.set(s.mmsi, trail);
+
       const newPos = Cesium.Cartesian3.fromDegrees(s.longitude, s.latitude, 0);
       const existing = shipEntities.current.get(s.mmsi);
 
@@ -478,6 +488,33 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       }
     }
   }, [liveShips, layers.ships]);
+
+  // ========== SHIP TRAIL (only render trail for currently selected ship) ==========
+  useEffect(() => {
+    const ds = dsRefs.current['ships'];
+    if (!ds) return;
+    if (shipTrailEntity.current) {
+      ds.entities.remove(shipTrailEntity.current);
+      shipTrailEntity.current = null;
+    }
+    if (selectedEntity?.type !== 'ship' || !layers.ships) return;
+    const mmsi = (selectedEntity.data as any).mmsi;
+    const trail = shipTrails.current.get(mmsi);
+    if (!trail || trail.length < 2) return;
+    const positions = trail.flatMap(p => [p.lon, p.lat]);
+    shipTrailEntity.current = ds.entities.add({
+      id: `ship-trail-${mmsi}`,
+      polyline: {
+        positions: Cesium.Cartesian3.fromDegreesArray(positions),
+        width: 2,
+        material: new Cesium.PolylineDashMaterialProperty({
+          color: Cesium.Color.WHITE.withAlpha(0.8),
+          dashLength: 12,
+        }),
+        clampToGround: false,
+      },
+    });
+  }, [selectedEntity, liveShips, layers.ships]);
 
   // ========== SATELLITES (persistent, no density filter, no availability) ==========
   useEffect(() => {
