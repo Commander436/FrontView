@@ -12,6 +12,7 @@ import { useAnnotations } from '@/hooks/useAnnotations';
 import { PointAnnotationModal } from '@/components/PointAnnotationModal';
 import { Search } from 'lucide-react';
 import { DisplayMode } from '@/types/globe';
+import { toast } from 'sonner';
 import filterNormalIcon from '@/assets/filter-normal.png';
 import filterCrtIcon from '@/assets/filter-crt.png';
 import filterNvgIcon from '@/assets/filter-nvg.png';
@@ -90,6 +91,28 @@ const Index = () => {
     }, 200);
     return () => clearInterval(interval);
   }, []);
+
+  // Zoom hints when buildings/traffic layers are enabled from orbit
+  useEffect(() => {
+    if (!layers.buildings) return;
+    const viewer = (window as any).__cesiumViewer;
+    const h = viewer?.camera?.positionCartographic?.height;
+    if (h && h > 50000) {
+      toast.message('3D Buildings enabled', {
+        description: 'Zoom into a city (< 50 km altitude) to load OSM building footprints.',
+      });
+    }
+  }, [layers.buildings]);
+  useEffect(() => {
+    if (!layers.streetTraffic) return;
+    const viewer = (window as any).__cesiumViewer;
+    const h = viewer?.camera?.positionCartographic?.height;
+    if (h && h > 30000) {
+      toast.message('Street Traffic enabled', {
+        description: 'Zoom into a city (< 30 km altitude) to spawn simulated vehicles.',
+      });
+    }
+  }, [layers.streetTraffic]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
