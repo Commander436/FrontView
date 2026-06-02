@@ -145,6 +145,8 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   const satEntities = useRef<Map<string, any>>(new Map());
   const shipEntities = useRef<Map<string, any>>(new Map());
   const shipLastSeen = useRef<Map<string, number>>(new Map());
+  const shipTrails = useRef<Map<string, { time: number; lat: number; lon: number }[]>>(new Map());
+  const shipTrailEntity = useRef<any>(null);
   const selectedSatOrbit = useRef<string | null>(null);
 
   const vehiclesRef = useRef<any[]>([]);
