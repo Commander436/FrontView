@@ -84,6 +84,7 @@ export interface Ship {
   speed: number;
   course: number;
   lastUpdate: string;
+  destination?: string;
 }
 
 export type InfraType = 'airport' | 'port' | 'wind_farm' | 'solar_farm' | 'nuclear' | 'hydro' | 'radio_tower' | 'cell_tower' | 'broadcast_tower';
