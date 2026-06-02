@@ -224,8 +224,10 @@ function renderDetails(entity: SelectedEntity) {
       const sh = d as Ship;
       return (
         <>
+          <InfoRow label="Name" value={sh.name} highlight />
           <InfoRow label="MMSI" value={sh.mmsi} />
           <InfoRow label="Type" value={sh.type.toUpperCase()} highlight />
+          {sh.destination && <InfoRow label="Destination" value={sh.destination} />}
           <InfoRow label="Speed" value={`${sh.speed} kn`} />
           <InfoRow label="Course" value={`${sh.course}°`} />
           <InfoRow label="Last Update" value={new Date(sh.lastUpdate).toUTCString()} />
