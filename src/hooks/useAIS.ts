@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Ship } from '@/types/globe';
 
-const AIS_WS_URL = 'https://frontview-l8t7.onrender.com';
-// AISStream.io requires a per-user API key for the public WebSocket.
-// Browser-side WS auth requires the key on the client; Vite env var lets us
-// keep it out of the source tree (set VITE_AISSTREAM_KEY in .env.local).
-const AIS_API_KEY: string =
-  (import.meta.env.VITE_AISSTREAM_KEY as string) ||
-  'e004e4bda671b27715aaf6b2ca33d22420a73ce7';
+// AIS data is now proxied through our backend (Express + SSE).
+// The browser never sees the AISStream API key.
+const AIS_BACKEND_BASE: string =
+  (import.meta.env.VITE_AIS_BACKEND_URL as string) ||
+  'https://frontview-l8t7.onrender.com';
+const AIS_SSE_URL = `${AIS_BACKEND_BASE.replace(/\/$/, '')}/api/ais`;
 
 function classifyShipType(typeNum: number): Ship['type'] {
   if (typeNum >= 70 && typeNum <= 79) return 'cargo';
@@ -24,7 +23,7 @@ export function useAIS(enabled: boolean) {
   const [error, setError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const shipMapRef = useRef<Map<string, Ship>>(new Map());
-  const wsRef = useRef<WebSocket | null>(null);
+  const esRef = useRef<EventSource | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const logTimer = useRef<ReturnType<typeof setInterval>>();
   const zeroShipTicks = useRef(0);
@@ -34,23 +33,18 @@ export function useAIS(enabled: boolean) {
     setLoading(true);
 
     try {
-      const ws = new WebSocket(AIS_WS_URL);
-      wsRef.current = ws;
+      const es = new EventSource(AIS_SSE_URL);
+      esRef.current = es;
 
-      ws.onopen = () => {
+      es.onopen = () => {
         setWsConnected(true);
         setError(null);
         setLoading(false);
         zeroShipTicks.current = 0;
-        console.log('[AIS] Connected to AISStream.io');
-        ws.send(JSON.stringify({
-          APIKey: AIS_API_KEY,
-          BoundingBoxes: [[[-90, -180], [90, 180]]],
-          FilterMessageTypes: ['PositionReport', 'ShipStaticData'],
-        }));
+        console.log('[AIS] Connected to backend SSE:', AIS_SSE_URL);
       };
 
-      ws.onmessage = (event) => {
+      es.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
           const meta = msg.MetaData;
@@ -93,21 +87,19 @@ export function useAIS(enabled: boolean) {
         } catch { /* skip malformed */ }
       };
 
-      ws.onerror = () => {
-        console.warn('[AIS ERROR] WebSocket error');
+      es.onerror = () => {
+        console.warn('[AIS ERROR] SSE connection error — retrying in 5s');
         setWsConnected(false);
-      };
-
-      ws.onclose = () => {
-        setWsConnected(false);
-        wsRef.current = null;
-        console.warn('[AIS] Connection closed — retrying in 5 seconds');
+        setError('AIS backend unreachable. Check AIS proxy server.');
+        try { es.close(); } catch { /* noop */ }
+        esRef.current = null;
         if (enabled) {
           reconnectTimer.current = setTimeout(connect, 5000);
         }
       };
     } catch {
       setWsConnected(false);
+      setError('AIS backend connection failed');
       if (enabled) reconnectTimer.current = setTimeout(connect, 5000);
     }
   }, [enabled]);
@@ -131,7 +123,7 @@ export function useAIS(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     logTimer.current = setInterval(() => {
-      const connected = wsRef.current?.readyState === WebSocket.OPEN;
+      const connected = esRef.current?.readyState === EventSource.OPEN;
       const count = shipMapRef.current.size;
       console.log(`[AIS] Live ships: ${count} (connected: ${connected})`);
 
@@ -153,7 +145,7 @@ export function useAIS(enabled: boolean) {
       shipMapRef.current.clear();
       setWsConnected(false);
       zeroShipTicks.current = 0;
-      if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+      if (esRef.current) { esRef.current.close(); esRef.current = null; }
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       return;
     }
@@ -161,7 +153,7 @@ export function useAIS(enabled: boolean) {
     connect();
 
     return () => {
-      if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+      if (esRef.current) { esRef.current.close(); esRef.current = null; }
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
     };
   }, [enabled, connect]);
