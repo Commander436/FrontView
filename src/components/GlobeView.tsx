@@ -1052,114 +1052,196 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     return () => { clearTimeout(timeout); viewer.camera.changed.removeEventListener(checkZoom); ds.entities.removeAll(); };
   }, [layers.buildings, displayMode]);
 
-  // ========== STREET TRAFFIC ==========
-  useEffect(() => {
-    const viewer = viewerRef.current;
-    const ds = dsRefs.current['traffic'];
-    if (!viewer || !ds) return;
-    ds.show = layers.streetTraffic;
-    if (!layers.streetTraffic) { ds.entities.removeAll(); vehiclesRef.current = []; trafficFetchedBbox.current = ''; return; }
+ // ========== STREET TRAFFIC ==========
+useEffect(() => {
+  const viewer = viewerRef.current;
+  const ds = dsRefs.current['traffic'];
 
-    let timeout: any;
-    lastTrafficTime.current = Date.now();
+  // Ensure DataSource exists
+  if (!viewer) return;
+  if (!ds) {
+    console.warn('[Traffic] DataSource "traffic" missing – creating it.');
+    dsRefs.current['traffic'] = viewer.dataSources.add(
+      new Cesium.CustomDataSource('traffic')
+    );
+  }
+  const trafficDs = dsRefs.current['traffic'];
+  if (!trafficDs) return;
 
-    const vehColor = displayMode === 'nvg' ? Cesium.Color.LIME :
-                     displayMode === 'crt' ? Cesium.Color.fromCssColorString('#00ff40') :
-                     displayMode === 'flir' ? Cesium.Color.fromCssColorString('#ff6600') :
-                     Cesium.Color.CYAN;
+  trafficDs.show = layers.streetTraffic;
+  if (!layers.streetTraffic) {
+    trafficDs.entities.removeAll();
+    vehiclesRef.current = [];
+    trafficFetchedBbox.current = '';
+    return;
+  }
 
-    const onPostRender = () => {
-      const now = Date.now();
-      const dt = (now - lastTrafficTime.current) / 1000;
-      lastTrafficTime.current = now;
-      vehiclesRef.current.forEach(v => {
-        v.progress += v.speed * v.direction * dt;
-        if (v.progress > 1) {
-          if (v.nextPaths && v.nextPaths.length > 0) {
-            const next = v.nextPaths[Math.floor(Math.random() * v.nextPaths.length)];
-            v.coords = next;
-            v.progress = 0;
-          } else { v.progress -= 1; }
+  let timeout: any;
+  lastTrafficTime.current = Date.now();
+
+  const vehColor =
+    displayMode === 'nvg'
+      ? Cesium.Color.LIME
+      : displayMode === 'crt'
+      ? Cesium.Color.fromCssColorString('#00ff40')
+      : displayMode === 'flir'
+      ? Cesium.Color.fromCssColorString('#ff6600')
+      : Cesium.Color.CYAN;
+
+  const onPostRender = () => {
+    const now = Date.now();
+    const dt = (now - lastTrafficTime.current) / 1000;
+    lastTrafficTime.current = now;
+    vehiclesRef.current.forEach((v) => {
+      v.progress += v.speed * v.direction * dt;
+      if (v.progress > 1) {
+        if (v.nextPaths && v.nextPaths.length > 0) {
+          const next = v.nextPaths[Math.floor(Math.random() * v.nextPaths.length)];
+          v.coords = next;
+          v.progress = 0;
+        } else {
+          v.progress -= 1;
         }
-        if (v.progress < 0) { v.progress += 1; }
-        const [lon, lat] = interpolateRoad(v.coords, Math.abs(v.progress));
+      }
+      if (v.progress < 0) v.progress += 1;
+      const [lon, lat] = interpolateRoad(v.coords, Math.abs(v.progress));
+      if (Number.isFinite(lon) && Number.isFinite(lat)) {
         v.entity.position = Cesium.Cartesian3.fromDegrees(lon, lat, 3);
-      });
-    };
-    viewer.scene.postRender.addEventListener(onPostRender);
+      }
+    });
+  };
+  viewer.scene.postRender.addEventListener(onPostRender);
 
-    const checkZoom = () => {
-      clearTimeout(timeout);
-      timeout = setTimeout(async () => {
-        const height = viewer.camera.positionCartographic?.height;
-        if (!height || height > 30000) { ds.entities.removeAll(); vehiclesRef.current = []; trafficFetchedBbox.current = ''; return; }
-        const rect = viewer.camera.computeViewRectangle();
-        if (!rect) return;
-        const s = Cesium.Math.toDegrees(rect.south), w = Cesium.Math.toDegrees(rect.west);
-        const n = Cesium.Math.toDegrees(rect.north), e = Cesium.Math.toDegrees(rect.east);
-        if ((n - s) > 0.15 || (e - w) > 0.15) return;
-        const bk = `${s.toFixed(3)},${w.toFixed(3)},${n.toFixed(3)},${e.toFixed(3)}`;
-        if (bk === trafficFetchedBbox.current) return;
-        trafficFetchedBbox.current = bk;
-        try {
-          const q = `[out:json][timeout:10];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential)$"](${s},${w},${n},${e});out geom 100;`;
-          const resp = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: `data=${encodeURIComponent(q)}` });
-          const data = await resp.json();
-          ds.entities.removeAll();
-          vehiclesRef.current = [];
-          const roads: number[][][] = [];
-          const nodeToRoads = new Map<string, number[]>();
-          (data.elements || []).forEach((way: any, roadIdx: number) => {
-            if (!way.geometry || way.geometry.length < 2) return;
-            const coords: number[][] = way.geometry.map((nd: any) => [nd.lon, nd.lat]);
-            roads.push(coords);
-            const startKey = `${coords[0][0].toFixed(5)},${coords[0][1].toFixed(5)}`;
-            const endKey = `${coords[coords.length-1][0].toFixed(5)},${coords[coords.length-1][1].toFixed(5)}`;
-            [startKey, endKey].forEach(k => {
-              if (!nodeToRoads.has(k)) nodeToRoads.set(k, []);
-              nodeToRoads.get(k)!.push(roadIdx);
-            });
-          });
-          roads.forEach((coords, roadIdx) => {
-            const count = Math.min(Math.max(Math.floor(coords.length / 3), 1), 4);
-            const endKey = `${coords[coords.length-1][0].toFixed(5)},${coords[coords.length-1][1].toFixed(5)}`;
-            const connectedIdxs = (nodeToRoads.get(endKey) || []).filter(i => i !== roadIdx);
-            const nextPaths = connectedIdxs.map(i => roads[i]);
-            for (let i = 0; i < count; i++) {
-              const vehId = `VEH-${Math.floor(1000 + Math.random() * 8999)}`;
-              const speed = 0.01 + Math.random() * 0.03;
-              const direction = Math.random() > 0.5 ? 1 : -1;
-              const progress = Math.random();
-              const [lon, lat] = interpolateRoad(coords, progress);
-              const entity = ds.entities.add({
-                position: Cesium.Cartesian3.fromDegrees(lon, lat, 3),
-                point: { pixelSize: 4, color: vehColor, outlineColor: vehColor.withAlpha(0.3), outlineWidth: 2, disableDepthTestDistance: 0 },
-                label: {
-                  text: vehId, font: '8px JetBrains Mono',
-                  fillColor: vehColor, outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-                  style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                  pixelOffset: new Cesium.Cartesian2(0, -10),
-                  disableDepthTestDistance: 0,
-                  scaleByDistance: new Cesium.NearFarScalar(100, 1, 15000, 0),
-                },
-              });
-              vehiclesRef.current.push({ entity, coords, progress, speed, direction, nextPaths });
-            }
-          });
-        } catch (err) { console.warn('Traffic fetch failed:', err); }
-      }, 2000);
-    };
+  const overpassEndpoints = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://lz4.overpass-api.de/api/interpreter',
+  ];
 
-    viewer.camera.changed.addEventListener(checkZoom);
-    checkZoom();
-    return () => {
-      clearTimeout(timeout);
-      viewer.scene.postRender.removeEventListener(onPostRender);
-      viewer.camera.changed.removeEventListener(checkZoom);
-      ds.entities.removeAll();
+  const fetchRoads = async (s: number, w: number, n: number, e: number) => {
+    const q = `[out:json][timeout:10];way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential)$"](${s},${w},${n},${e});out geom 100;`;
+    let lastError: any = null;
+    for (const url of overpassEndpoints) {
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          body: `data=${encodeURIComponent(q)}`,
+        });
+        if (!resp.ok) {
+          lastError = new Error(`HTTP ${resp.status}`);
+          continue;
+        }
+        const data = await resp.json();
+        return data;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    console.warn('[Traffic] All Overpass endpoints failed:', lastError);
+    return null;
+  };
+
+  const checkZoom = () => {
+    clearTimeout(timeout);
+    timeout = setTimeout(async () => {
+      const height = viewer.camera.positionCartographic?.height;
+      // Be more forgiving: allow up to ~150km
+      if (!height || height > 150000) {
+        trafficDs.entities.removeAll();
+        vehiclesRef.current = [];
+        trafficFetchedBbox.current = '';
+        return;
+      }
+
+      const rect = viewer.camera.computeViewRectangle();
+      if (!rect) return;
+      const s = Cesium.Math.toDegrees(rect.south);
+      const w = Cesium.Math.toDegrees(rect.west);
+      const n = Cesium.Math.toDegrees(rect.north);
+      const e = Cesium.Math.toDegrees(rect.east);
+
+      // Loosen bbox constraint a bit
+      if (n - s > 1 || e - w > 1) return;
+
+      const bk = `${s.toFixed(3)},${w.toFixed(3)},${n.toFixed(3)},${e.toFixed(3)}`;
+      // Force a fetch when layer is toggled on by ignoring previous bbox once
+      if (bk === trafficFetchedBbox.current && vehiclesRef.current.length > 0) return;
+      trafficFetchedBbox.current = bk;
+
+      const data = await fetchRoads(s, w, n, e);
+      if (!data || !data.elements) return;
+
+      trafficDs.entities.removeAll();
       vehiclesRef.current = [];
-    };
-  }, [layers.streetTraffic, displayMode]);
+
+      const roads: number[][][] = [];
+      const nodeToRoads = new Map<string, number[]>();
+
+      (data.elements || []).forEach((way: any, roadIdx: number) => {
+        if (!way.geometry || way.geometry.length < 2) return;
+        const coords: number[][] = way.geometry.map((nd: any) => [nd.lon, nd.lat]);
+        roads.push(coords);
+        const startKey = `${coords[0][0].toFixed(5)},${coords[0][1].toFixed(5)}`;
+        const endKey = `${coords[coords.length - 1][0].toFixed(5)},${coords[coords.length - 1][1].toFixed(5)}`;
+        [startKey, endKey].forEach((k) => {
+          if (!nodeToRoads.has(k)) nodeToRoads.set(k, []);
+          nodeToRoads.get(k)!.push(roadIdx);
+        });
+      });
+
+      roads.forEach((coords, roadIdx) => {
+        const count = Math.min(Math.max(Math.floor(coords.length / 3), 1), 4);
+        const endKey = `${coords[coords.length - 1][0].toFixed(5)},${coords[coords.length - 1][1].toFixed(5)}`;
+        const connectedIdxs = (nodeToRoads.get(endKey) || []).filter((i) => i !== roadIdx);
+        const nextPaths = connectedIdxs.map((i) => roads[i]);
+
+        for (let i = 0; i < count; i++) {
+          const vehId = `VEH-${Math.floor(1000 + Math.random() * 8999)}`;
+          const speed = 0.01 + Math.random() * 0.03;
+          const direction = Math.random() > 0.5 ? 1 : -1;
+          const progress = Math.random();
+          const [lon, lat] = interpolateRoad(coords, progress);
+          if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+
+          const entity = trafficDs.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, 3),
+            point: {
+              pixelSize: 4,
+              color: vehColor,
+              outlineColor: vehColor.withAlpha(0.3),
+              outlineWidth: 2,
+              disableDepthTestDistance: 0,
+            },
+            label: {
+              text: vehId,
+              font: '8px JetBrains Mono',
+              fillColor: vehColor,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              pixelOffset: new Cesium.Cartesian2(0, -10),
+              disableDepthTestDistance: 0,
+              scaleByDistance: new Cesium.NearFarScalar(100, 1, 15000, 0),
+            },
+          });
+
+          vehiclesRef.current.push({ entity, coords, progress, speed, direction, nextPaths });
+        }
+      });
+    }, 800); // shorter debounce so it feels responsive
+  };
+
+  viewer.camera.changed.addEventListener(checkZoom);
+  checkZoom();
+
+  return () => {
+    clearTimeout(timeout);
+    viewer.scene.postRender.removeEventListener(onPostRender);
+    viewer.camera.changed.removeEventListener(checkZoom);
+    trafficDs.entities.removeAll();
+    vehiclesRef.current = [];
+  };
+}, [layers.streetTraffic, displayMode]);
 
   // ========== ANNOTATIONS (render + draw) ==========
   const annotationsRef = useRef(annotations);
