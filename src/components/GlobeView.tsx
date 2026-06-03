@@ -170,6 +170,14 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   const trafficFetchedBbox = useRef('');
   const buildingFetchedBbox = useRef('');
 
+  // 3D model spawn state (one model at a time)
+  const modelEntityRef = useRef<any>(null);
+  const modelOwnerRef = useRef<{ kind: 'aircraft' | 'ship'; id: string } | null>(null);
+
+  // Post-processing stage instances keyed by display mode
+  const postStagesRef = useRef<Record<string, any>>({});
+  const activeStageRef = useRef<any>(null);
+
   // ========== INIT VIEWER ==========
   useEffect(() => {
     if (!containerRef.current || viewerRef.current) return;
