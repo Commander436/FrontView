@@ -19,9 +19,11 @@ declare const Cesium: any;
 // ---- SVG Icon Data URIs ----
 const mkIcon = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
 
-const ICON_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="white" stroke="white" stroke-width="0.3"><path d="M12 2L14 8H20L14.5 12L16 20H12L10 15L4 17L6 12L4 7H10Z"/></g></svg>`);
-const ICON_MIL_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="#ff8c00" stroke="#ff6600" stroke-width="0.5"><path d="M12 1L15 9H22L15 13L17 22H12L10 16L2 18L5 12L2 6H10Z"/></g></svg>`);
-const ICON_UNKNOWN_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="#aaaaaa" stroke-width="1.5"><path d="M12 4L18 12L12 20L6 12Z"/></g></svg>`);
+// High-contrast vector silhouettes with a soft outer glow. Rendered at 2x for
+// crisp scaling. Always billboarded, rotated to the entity heading.
+const ICON_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><defs><filter id="g" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#g)" fill="#ffffff" stroke="#000000" stroke-width="0.6" stroke-linejoin="round"><path d="M24 3 L26 19 L45 26 L45 30 L26 27 L25 39 L31 42 L31 45 L24 43 L17 45 L17 42 L23 39 L22 27 L3 30 L3 26 L22 19 Z"/></g></svg>`);
+const ICON_MIL_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><defs><filter id="gm" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#gm)" fill="#ff8c1a" stroke="#1a0a00" stroke-width="0.7" stroke-linejoin="round"><path d="M24 2 L27 18 L46 28 L46 31 L27 29 L26 38 L33 43 L33 46 L24 43 L15 46 L15 43 L22 38 L21 29 L2 31 L2 28 L21 18 Z"/></g></svg>`);
+const ICON_UNKNOWN_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><g fill="#c0c0c0" stroke="#000" stroke-width="0.5" stroke-linejoin="round"><path d="M24 6 L36 24 L24 42 L12 24 Z" opacity="0.85"/></g></svg>`);
 const ICON_SAT = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#f59e0b" stroke="#d97706" stroke-width="0.3"><rect x="1" y="6" width="5" height="4" rx="0.5"/><rect x="10" y="6" width="5" height="4" rx="0.5"/><rect x="6" y="5" width="4" height="6" rx="1" fill="#fbbf24"/><circle cx="8" cy="8" r="1.5" fill="#d97706"/></g></svg>`);
 const ICON_BASE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M9 1L16 5V10C16 14 12.5 17 9 17C5.5 17 2 14 2 10V5Z" fill="#39ff1440" stroke="#39ff14" stroke-width="1"/><polygon points="9,5 10.2,7.5 13,7.8 11,9.7 11.5,12.5 9,11.2 6.5,12.5 7,9.7 5,7.8 7.8,7.5" fill="#39ff14"/></svg>`);
 const ICON_CITY = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.3"><rect x="2" y="8" width="3" height="7"/><rect x="6" y="4" width="4" height="11"/><rect x="11" y="6" width="3" height="9"/><rect x="7" y="1" width="2" height="3" fill="#94a3b8"/></g></svg>`);
@@ -56,10 +58,24 @@ function annMaterial(color: any, style: string) {
   return color;
 }
 
-const SHIP_COLORS: Record<string, string> = { cargo: '#3b82f6', tanker: '#f59e0b', passenger: '#8b5cf6', fishing: '#10b981', military: '#ef4444' };
+const SHIP_COLORS: Record<string, string> = {
+  cargo: '#3b82f6',     // blue cargo silhouette
+  tanker: '#f59e0b',
+  passenger: '#ffffff', // white cruise silhouette
+  fishing: '#10b981',
+  military: '#ef4444',
+};
 function makeShipIcon(type: string) {
   const c = SHIP_COLORS[type] || '#3b82f6';
-  return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M8 2L13 10H3Z" fill="${c}" stroke="${c}" stroke-width="0.3"/><line x1="8" y1="10" x2="8" y2="14" stroke="${c}" stroke-width="1"/></svg>`);
+  // Distinct silhouettes per class. All face "up" so billboard rotation matches heading.
+  if (type === 'passenger') {
+    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g fill="${c}" stroke="#000" stroke-width="0.6" stroke-linejoin="round"><path d="M20 3 L23 12 L23 22 L31 26 L31 30 L9 30 L9 26 L17 22 L17 12 Z"/><rect x="18" y="14" width="4" height="2"/><rect x="18" y="18" width="4" height="2"/></g></svg>`);
+  }
+  if (type === 'cargo' || type === 'tanker') {
+    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g fill="${c}" stroke="#000" stroke-width="0.6" stroke-linejoin="round"><path d="M20 3 L24 14 L32 28 L8 28 L16 14 Z"/><rect x="14" y="18" width="12" height="3"/><rect x="14" y="22" width="12" height="3"/></g></svg>`);
+  }
+  // generic / fishing / military
+  return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g fill="${c}" stroke="#000" stroke-width="0.6" stroke-linejoin="round"><path d="M20 4 L26 16 L32 30 L8 30 L14 16 Z"/></g></svg>`);
 }
 
 function getInfraIcon(type: string) {
@@ -154,6 +170,105 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   const trafficFetchedBbox = useRef('');
   const buildingFetchedBbox = useRef('');
 
+  // 3D model spawn state (one model at a time)
+  const modelEntityRef = useRef<any>(null);
+  const modelOwnerRef = useRef<{ kind: 'aircraft' | 'ship'; id: string } | null>(null);
+
+  // Post-processing stage instances keyed by display mode
+  const postStagesRef = useRef<Record<string, any>>({});
+  const activeStageRef = useRef<any>(null);
+
+  // -------- 3D model spawn helpers --------
+  const MODEL_URIS: Record<string, string> = {
+    'aircraft-civilian': 'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumAir/Cesium_Air.glb',
+    'aircraft-military': 'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumAir/Cesium_Air.glb',
+    'ship-cargo':        'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumMilkTruck/CesiumMilkTruck.glb',
+    'ship-passenger':    'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumMilkTruck/CesiumMilkTruck.glb',
+  };
+
+  const despawnModel = useCallback(() => {
+    const viewer = viewerRef.current;
+    const m = modelEntityRef.current;
+    if (viewer && m) {
+      try { viewer.entities.remove(m); } catch { /* noop */ }
+    }
+    modelEntityRef.current = null;
+    // Restore source billboard visibility
+    const owner = modelOwnerRef.current;
+    if (owner) {
+      const src = owner.kind === 'aircraft'
+        ? aircraftEntities.current.get(owner.id)
+        : shipEntities.current.get(owner.id);
+      if (src?.billboard) src.billboard.show = true;
+    }
+    modelOwnerRef.current = null;
+    if (viewer) viewer.trackedEntity = undefined;
+  }, []);
+
+  const spawnModelFor = useCallback((kind: 'aircraft' | 'ship', id: string, data: any, sourceEntity: any) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    despawnModel();
+
+    let uriKey: string;
+    if (kind === 'aircraft') {
+      uriKey = (data.isMilitary || data.militaryClassification) ? 'aircraft-military' : 'aircraft-civilian';
+    } else {
+      uriKey = data.type === 'passenger' ? 'ship-passenger' : 'ship-cargo';
+    }
+    const uri = MODEL_URIS[uriKey];
+    if (!uri) return;
+
+    const heading = kind === 'aircraft' ? (data.heading || 0) : (data.course || 0);
+    const hpr = new Cesium.HeadingPitchRoll(
+      Cesium.Math.toRadians(heading),
+      0,
+      0,
+    );
+    const orientation = new Cesium.CallbackProperty(() => {
+      const pos = sourceEntity.position?.getValue(viewer.clock.currentTime);
+      if (!pos) return Cesium.Transforms.headingPitchRollQuaternion(Cesium.Cartesian3.ZERO, hpr);
+      return Cesium.Transforms.headingPitchRollQuaternion(pos, hpr);
+    }, false);
+
+    const modelEntity = viewer.entities.add({
+      position: sourceEntity.position, // shares SampledPositionProperty
+      orientation,
+      model: {
+        uri,
+        minimumPixelSize: 64,
+        maximumScale: kind === 'aircraft' ? 20000 : 30000,
+        scale: kind === 'aircraft' ? 1.5 : 1.0,
+        silhouetteColor: kind === 'aircraft' && uriKey === 'aircraft-military'
+          ? Cesium.Color.fromCssColorString('#ff8c1a')
+          : Cesium.Color.WHITE,
+        silhouetteSize: 1.5,
+      },
+      properties: sourceEntity.properties,
+    });
+    modelEntityRef.current = modelEntity;
+    modelOwnerRef.current = { kind, id };
+
+    // Hide the source 2D icon while model is up
+    if (sourceEntity.billboard) sourceEntity.billboard.show = false;
+
+    // Camera: orbit slightly behind & above the model. Distance scales with speed.
+    const speed = kind === 'aircraft' ? (data.velocity || 200) : (data.speed || 10);
+    const range = kind === 'aircraft'
+      ? Math.max(1500, Math.min(15000, speed * 30))
+      : Math.max(400, Math.min(4000, speed * 60));
+    viewer.flyTo(modelEntity, {
+      duration: 1.2,
+      offset: new Cesium.HeadingPitchRange(
+        Cesium.Math.toRadians(heading + 180),
+        Cesium.Math.toRadians(-20),
+        range,
+      ),
+    }).then(() => {
+      try { viewer.trackedEntity = modelEntity; } catch { /* noop */ }
+    }).catch(() => { /* noop */ });
+  }, [despawnModel]);
+
   // ========== INIT VIEWER ==========
   useEffect(() => {
     if (!containerRef.current || viewerRef.current) return;
@@ -202,6 +317,10 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((click: any) => {
       const picked = viewer.scene.pick(click.position);
+      // Click on empty space → despawn any active 3D model
+      if (!Cesium.defined(picked) || !picked.id) {
+        if (modelEntityRef.current) despawnModel();
+      }
       if (Cesium.defined(picked) && picked.id) {
         try {
           const entityType = picked.id.properties?.entityType?.getValue();
@@ -241,6 +360,24 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+    // ---------- DOUBLE-CLICK → spawn 3D model + camera follow ----------
+    handler.setInputAction((click: any) => {
+      const picked = viewer.scene.pick(click.position);
+      if (!Cesium.defined(picked) || !picked.id) return;
+      let entityType: string | undefined;
+      let data: any;
+      try {
+        entityType = picked.id.properties?.entityType?.getValue();
+        const raw = picked.id.properties?.entityData?.getValue();
+        if (raw) data = JSON.parse(raw);
+      } catch { return; }
+      if (!entityType || !data) return;
+      if (entityType !== 'aircraft' && entityType !== 'ship') return;
+
+      const id = entityType === 'aircraft' ? data.icao24 : data.mmsi;
+      spawnModelFor(entityType as 'aircraft' | 'ship', id, data, picked.id);
+    }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
     viewerRef.current = viewer;
     (window as any).__cesiumViewer = viewer;
     viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(20, 20, 20000000), duration: 0 });
@@ -252,6 +389,167 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       dsRefs.current = {};
     };
   }, []);
+
+  // ========== POST-PROCESSING FILTERS (NVG / CRT / FLIR) ==========
+  // Applies a real GLSL fragment shader to the entire scene (including HUD,
+  // labels, icons, and entities) via Cesium PostProcessStage. No CSS filters,
+  // no DOM overlays. Switching mode swaps the stage with a smooth crossfade
+  // driven by a uniform.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || typeof Cesium === 'undefined') return;
+
+    const stages = viewer.scene.postProcessStages;
+
+    // Tear down any prior stage
+    if (activeStageRef.current) {
+      try { stages.remove(activeStageRef.current); } catch { /* noop */ }
+      activeStageRef.current = null;
+    }
+
+    if (displayMode === 'normal') return;
+
+    // Shared GLSL utilities (legacy syntax — Cesium auto-translates to GLSL3)
+    const common = `
+      uniform sampler2D colorTexture;
+      uniform float u_intensity;
+      uniform float u_time;
+      varying vec2 v_textureCoordinates;
+      float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
+      vec3 lum(vec3 c){ float g = dot(c, vec3(0.299,0.587,0.114)); return vec3(g); }
+    `;
+
+    let fragmentShader = '';
+    if (displayMode === 'nvg') {
+      fragmentShader = `${common}
+        void main() {
+          vec2 uv = v_textureCoordinates;
+          // chromatic aberration + slight zoom-in
+          vec2 c = uv - 0.5;
+          uv = 0.5 + c * (1.0 - 0.02 * u_intensity);
+          float ca = 0.002 * u_intensity;
+          vec3 col;
+          col.r = texture2D(colorTexture, uv + vec2(ca, 0.0)).r;
+          col.g = texture2D(colorTexture, uv).g;
+          col.b = texture2D(colorTexture, uv - vec2(ca, 0.0)).b;
+          // NVG green LUT (desaturate -> map to green)
+          float g = dot(col, vec3(0.299,0.587,0.114));
+          g = pow(g, 0.9) * 1.25;
+          vec3 nvg = vec3(0.05, 1.0, 0.18) * g;
+          // grain
+          float n = (rand(uv * vec2(1024.0,1024.0) + u_time) - 0.5) * 0.12 * u_intensity;
+          nvg += n;
+          // vignette + circular scope mask
+          float d = length(uv - 0.5);
+          float vig = smoothstep(0.78, 0.32, d);
+          nvg *= mix(1.0, vig, u_intensity);
+          // edge contrast
+          nvg = mix(nvg, smoothstep(0.0, 1.0, nvg), 0.25);
+          gl_FragColor = vec4(nvg, 1.0);
+        }
+      `;
+    } else if (displayMode === 'crt') {
+      fragmentShader = `${common}
+        void main() {
+          vec2 uv = v_textureCoordinates;
+          // slight barrel distortion (zoom-out a touch)
+          vec2 c = uv - 0.5;
+          float r2 = dot(c, c);
+          uv = 0.5 + c * (1.0 + 0.10 * r2 * u_intensity);
+          // subtle jitter
+          uv.x += (rand(vec2(u_time, uv.y)) - 0.5) * 0.0015 * u_intensity;
+          // RGB split
+          float s = 0.0025 * u_intensity;
+          vec3 col;
+          col.r = texture2D(colorTexture, uv + vec2(s, 0.0)).r;
+          col.g = texture2D(colorTexture, uv).g;
+          col.b = texture2D(colorTexture, uv - vec2(s, 0.0)).b;
+          // phosphor tint (pale green/white)
+          col = mix(col, col * vec3(0.85, 1.05, 0.90), 0.4 * u_intensity);
+          // scanlines
+          float sl = sin(uv.y * 900.0) * 0.5 + 0.5;
+          col *= mix(1.0, mix(0.75, 1.0, sl), u_intensity);
+          // noise
+          col += (rand(uv * 800.0 + u_time) - 0.5) * 0.05 * u_intensity;
+          // bloom-ish lift
+          col += max(col - 0.7, 0.0) * 0.4;
+          // contrast
+          col = mix(vec3(0.5), col, 1.15);
+          // vignette
+          float d = length(uv - 0.5);
+          col *= smoothstep(0.95, 0.4, d) * 0.5 + 0.6;
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `;
+    } else if (displayMode === 'flir') {
+      fragmentShader = `${common}
+        // White-hot thermal LUT
+        vec3 thermal(float t) {
+          t = clamp(t, 0.0, 1.0);
+          vec3 c1 = vec3(0.0, 0.0, 0.0);
+          vec3 c2 = vec3(0.20, 0.0, 0.40);
+          vec3 c3 = vec3(0.85, 0.20, 0.0);
+          vec3 c4 = vec3(1.0, 0.85, 0.0);
+          vec3 c5 = vec3(1.0, 1.0, 1.0);
+          if (t < 0.25) return mix(c1, c2, t / 0.25);
+          if (t < 0.50) return mix(c2, c3, (t - 0.25) / 0.25);
+          if (t < 0.80) return mix(c3, c4, (t - 0.50) / 0.30);
+          return mix(c4, c5, (t - 0.80) / 0.20);
+        }
+        void main() {
+          vec2 uv = v_textureCoordinates;
+          vec3 col = texture2D(colorTexture, uv).rgb;
+          float l = dot(col, vec3(0.299, 0.587, 0.114));
+          // increase heat contrast & exposure
+          l = clamp((l - 0.1) * 1.6, 0.0, 1.0);
+          vec3 t = thermal(l);
+          // noise
+          t += (rand(uv * 600.0 + u_time) - 0.5) * 0.04 * u_intensity;
+          // bloom on hot spots
+          t += max(t - 0.75, 0.0) * 0.6;
+          gl_FragColor = vec4(mix(col, t, u_intensity), 1.0);
+        }
+      `;
+    }
+
+    if (!fragmentShader) return;
+
+    // Crossfade in: animate u_intensity 0 → 1 over ~350ms.
+    let intensity = 0.0;
+    const stage = new Cesium.PostProcessStage({
+      fragmentShader,
+      uniforms: {
+        u_intensity: () => intensity,
+        u_time: () => (performance.now() / 1000.0) % 1000.0,
+      },
+    });
+    stages.add(stage);
+    activeStageRef.current = stage;
+
+    const start = performance.now();
+    let raf = 0;
+    const tick = () => {
+      const t = Math.min(1, (performance.now() - start) / 350);
+      intensity = t;
+      viewer.scene.requestRender();
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      try { stages.remove(stage); } catch { /* noop */ }
+      if (activeStageRef.current === stage) activeStageRef.current = null;
+    };
+  }, [displayMode]);
+
+  // Despawn 3D model when layer ownership disappears
+  useEffect(() => {
+    const owner = modelOwnerRef.current;
+    if (!owner) return;
+    if (owner.kind === 'aircraft' && !layers.aircraft && !layers.militaryFlights) despawnModel();
+    if (owner.kind === 'ship' && !layers.ships) despawnModel();
+  }, [layers.aircraft, layers.militaryFlights, layers.ships, despawnModel]);
 
   // ========== AIRCRAFT (persistent, incremental, AWACS overlays) ==========
   useEffect(() => {
@@ -456,6 +754,8 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         if (posProperty && posProperty.addSample) {
           posProperty.addSample(future, newPos);
         }
+        existing.billboard.image = makeShipIcon(s.type);
+        existing.billboard.rotation = Cesium.Math.toRadians(-(s.course || 0));
         existing.properties.entityData = JSON.stringify(s);
       } else {
         const posProperty = new Cesium.SampledPositionProperty();
@@ -467,9 +767,11 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
           id: `ship-${s.mmsi}`,
           position: posProperty,
           billboard: {
-            image: makeShipIcon(s.type), width: 16, height: 16,
+            image: makeShipIcon(s.type), width: 22, height: 22,
+            rotation: Cesium.Math.toRadians(-(s.course || 0)),
+            alignedAxis: Cesium.Cartesian3.UNIT_Z,
             disableDepthTestDistance: 0,
-            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.5),
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.8, 2e7, 0.45),
           },
           properties: { entityType: 'ship', entityData: JSON.stringify(s) },
         });

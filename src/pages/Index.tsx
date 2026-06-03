@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { LeftPanel } from '@/components/LeftPanel';
 import { RightPanel } from '@/components/RightPanel';
 import { GlobeView } from '@/components/GlobeView';
@@ -197,16 +197,9 @@ const Index = () => {
     }
   };
 
-  const globeFilter = useMemo(() => {
-    switch (displayMode) {
-      case 'crt': return 'sepia(1) hue-rotate(80deg) saturate(2) brightness(0.7) contrast(1.3)';
-      case 'nvg': return 'sepia(1) hue-rotate(80deg) saturate(3) brightness(0.8) contrast(1.5)';
-      case 'flir': return 'saturate(0.3) brightness(0.9) contrast(1.4)';
-      default: return 'none';
-    }
-  }, [displayMode]);
-
-  const showScope = layers.scopeOverlay || displayMode !== 'normal';
+  // Scene tinting is now handled by Cesium PostProcessStage shaders inside
+  // GlobeView — no CSS filter is applied here.
+  const showScope = layers.scopeOverlay;
   const hudColor = displayMode === 'flir' ? 'text-orange-400/80' : displayMode === 'nvg' || displayMode === 'crt' ? 'text-green-400/80' : 'text-foreground/60';
 
   return (
@@ -229,13 +222,7 @@ const Index = () => {
       />
       </div>
       <main className="flex-1 relative min-w-0">
-        <div
-          className={`w-full h-full ${introAnim ? 'intro-globe-in' : ''}`}
-          style={{
-            filter: globeFilter,
-            transition: 'filter 700ms cubic-bezier(0.22, 1, 0.36, 1)',
-          }}
-        >
+        <div className={`w-full h-full ${introAnim ? 'intro-globe-in' : ''}`}>
           <GlobeView
             layers={layers}
             aircraft={aircraft}
@@ -250,7 +237,7 @@ const Index = () => {
             onDrawComplete={handleDrawComplete}
           />
         </div>
-        {showScope && <ScopeOverlay mode={displayMode === 'normal' ? 'scope-only' : displayMode} />}
+        {showScope && <ScopeOverlay mode="scope-only" />}
 
         {/* Unified bottom-center tactical dock */}
         <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-30 ${introAnim ? 'intro-bottom-in' : ''}`}>

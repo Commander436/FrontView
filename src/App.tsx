@@ -7,6 +7,9 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { TerminalIntro } from "./components/TerminalIntro";
+// Side-effect import: starts the global AIS preload stream while the terminal
+// intro is still playing so ships are already cached when the user enters.
+import "@/lib/aisStore";
 
 const queryClient = new QueryClient();
 
