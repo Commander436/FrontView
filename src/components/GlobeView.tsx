@@ -1052,52 +1052,14 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     return () => { clearTimeout(timeout); viewer.camera.changed.removeEventListener(checkZoom); ds.entities.removeAll(); };
   }, [layers.buildings, displayMode]);
 
-// Persistent caches
-const roadGraphCacheRef = useRef<
-  Map<string, { nodes: Map<string, RoadNode>; edges: RoadEdge[] }>
->(new Map());
-
-type RoadNodeId = string;
-type RoadNode = {
-  id: RoadNodeId;
-  lon: number;
-  lat: number;
-  outgoing: RoadEdge[];
-};
-
-type RoadEdge = {
-  id: string;
-  from: RoadNodeId;
-  to: RoadNodeId;
-  coords: number[][];
-  length: number;
-  dirVec: [number, number];
-};
-
-type VehicleSim = {
-  id: string;
-  entity: Cesium.Entity;
-  edge: RoadEdge;
-  t: number;
-  speed: number;
-  state: 'moving' | 'waiting';
-  waitUntil: number;
-  currentLonLat: [number, number];
-};
-
-type NodeSignal = {
-  id: RoadNodeId;
-  cycleMs: number;
-  offsetMs: number;
-};
-
-const nodeSignalsRef = useRef<Map<RoadNodeId, NodeSignal>>(new Map());
-
-// ========== STREET TRAFFIC (DEEPER SIM) ==========
+// ========== STREET TRAFFIC (REVAMPED) ==========
 useEffect(() => {
   const viewer = viewerRef.current;
+
+  // Ensure viewer exists
   if (!viewer) return;
 
+  // Ensure DataSource exists
   if (!dsRefs.current['traffic']) {
     dsRefs.current['traffic'] = viewer.dataSources.add(
       new Cesium.CustomDataSource('traffic')
@@ -1105,29 +1067,61 @@ useEffect(() => {
   }
   const ds = dsRefs.current['traffic'];
 
+  // Toggle visibility
   ds.show = layers.streetTraffic;
   if (!layers.streetTraffic) {
     ds.entities.removeAll();
     vehiclesRef.current = [];
+    trafficFetchedBbox.current = '';
     return;
   }
 
   let timeout: any;
   lastTrafficTime.current = Date.now();
 
+  // Bright orange color
   const vehColor = Cesium.Color.fromCssColorString('#ff7f00');
 
+  // Smooth animation
+  const onPostRender = () => {
+    const now = Date.now();
+    const dt = (now - lastTrafficTime.current) / 1000;
+    lastTrafficTime.current = now;
+
+    vehiclesRef.current.forEach((v) => {
+      v.progress += v.speed * v.direction * dt;
+
+      if (v.progress > 1) {
+        if (v.nextPaths.length > 0) {
+          v.coords = v.nextPaths[Math.floor(Math.random() * v.nextPaths.length)];
+          v.progress = 0;
+        } else {
+          v.progress -= 1;
+        }
+      }
+      if (v.progress < 0) v.progress += 1;
+
+      const [lon, lat] = interpolateRoad(v.coords, Math.abs(v.progress));
+      if (Number.isFinite(lon) && Number.isFinite(lat)) {
+        v.entity.position = Cesium.Cartesian3.fromDegrees(lon, lat, 3);
+      }
+    });
+  };
+  viewer.scene.postRender.addEventListener(onPostRender);
+
+  // Overpass fallback endpoints
   const overpassEndpoints = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
     'https://lz4.overpass-api.de/api/interpreter',
   ];
 
-  const fetchRoadsRaw = async (s: number, w: number, n: number, e: number) => {
+  const fetchRoads = async (s: number, w: number, n: number, e: number) => {
     const q = `[out:json][timeout:10];
       way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential)$"]
       (${s},${w},${n},${e});
       out geom 100;`;
+
     for (const url of overpassEndpoints) {
       try {
         const resp = await fetch(url, {
@@ -1142,205 +1136,19 @@ useEffect(() => {
     return null;
   };
 
-  const buildGraph = (data: any) => {
-    const nodes = new Map<RoadNodeId, RoadNode>();
-    const edges: RoadEdge[] = [];
-
-    (data.elements || []).forEach((way: any, idx: number) => {
-      if (!way.geometry || way.geometry.length < 2) return;
-      const coords: number[][] = way.geometry.map((nd: any) => [nd.lon, nd.lat]);
-
-      const start = coords[0];
-      const end = coords[coords.length - 1];
-
-      const fromId: RoadNodeId = `${start[0].toFixed(5)},${start[1].toFixed(5)}`;
-      const toId: RoadNodeId = `${end[0].toFixed(5)},${end[1].toFixed(5)}`;
-
-      if (!nodes.has(fromId)) {
-        nodes.set(fromId, { id: fromId, lon: start[0], lat: start[1], outgoing: [] });
-      }
-      if (!nodes.has(toId)) {
-        nodes.set(toId, { id: toId, lon: end[0], lat: end[1], outgoing: [] });
-      }
-
-      let length = 0;
-      for (let i = 1; i < coords.length; i++) {
-        const dx = coords[i][0] - coords[i - 1][0];
-        const dy = coords[i][1] - coords[i - 1][1];
-        length += Math.sqrt(dx * dx + dy * dy);
-      }
-
-      const dirVec: [number, number] = [
-        (end[0] - start[0]) / (length || 1),
-        (end[1] - start[1]) / (length || 1),
-      ];
-
-      const edge: RoadEdge = {
-        id: `E-${idx}`,
-        from: fromId,
-        to: toId,
-        coords,
-        length,
-        dirVec,
-      };
-      edges.push(edge);
-      nodes.get(fromId)!.outgoing.push(edge);
-    });
-
-    return { nodes, edges };
-  };
-
-  const getOrBuildGraph = async (s: number, w: number, n: number, e: number) => {
-    const key = `${s.toFixed(4)},${w.toFixed(4)},${n.toFixed(4)},${e.toFixed(4)}`;
-    if (roadGraphCacheRef.current.has(key)) {
-      return roadGraphCacheRef.current.get(key)!;
-    }
-    const raw = await fetchRoadsRaw(s, w, n, e);
-    if (!raw) return null;
-    const graph = buildGraph(raw);
-    roadGraphCacheRef.current.set(key, graph);
-    if (roadGraphCacheRef.current.size > 10) {
-      const firstKey = roadGraphCacheRef.current.keys().next().value;
-      roadGraphCacheRef.current.delete(firstKey);
-    }
-    return graph;
-  };
-
-  const ensureNodeSignal = (nodeId: RoadNodeId) => {
-    if (!nodeSignalsRef.current.has(nodeId)) {
-      nodeSignalsRef.current.set(nodeId, {
-        id: nodeId,
-        cycleMs: 20000,
-        offsetMs: Math.floor(Math.random() * 20000),
-      });
-    }
-    return nodeSignalsRef.current.get(nodeId)!;
-  };
-
-  const isEdgeGreen = (edge: RoadEdge, now: number) => {
-    const signal = ensureNodeSignal(edge.to);
-    const t = (now + signal.offsetMs) % signal.cycleMs;
-    const phase = t / signal.cycleMs; // 0..1
-
-    // Very simple: half cycle for "NS", half for "EW"
-    const vertical = Math.abs(edge.dirVec[1]) >= Math.abs(edge.dirVec[0]);
-    if (vertical) {
-      return phase < 0.5; // green in first half
-    } else {
-      return phase >= 0.5; // green in second half
-    }
-  };
-
-  const spawnVehiclesOnGraph = (graph: { nodes: Map<string, RoadNode>; edges: RoadEdge[] }) => {
-    const { edges } = graph;
-    if (!edges.length) return;
-
-    const targetCount = 200; // global density
-    while (vehiclesRef.current.length < targetCount) {
-      const edge = edges[Math.floor(Math.random() * edges.length)];
-      const t = Math.random();
-      const [lon, lat] = interpolateRoad(edge.coords, t);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-
-      const vehId = `VEH-${Math.floor(1000 + Math.random() * 8999)}`;
-
-      const entity = ds.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(lon, lat, 3),
-        point: {
-          pixelSize: 4,
-          color: vehColor,
-          outlineColor: vehColor.withAlpha(0.3),
-          outlineWidth: 2,
-          disableDepthTestDistance: 0,
-        },
-        label: {
-          text: vehId,
-          font: '8px JetBrains Mono',
-          fillColor: vehColor,
-          outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          pixelOffset: new Cesium.Cartesian2(0, -10),
-          disableDepthTestDistance: 0,
-          scaleByDistance: new Cesium.NearFarScalar(100, 1, 15000, 0),
-        },
-      });
-
-      const v: VehicleSim = {
-        id: vehId,
-        entity,
-        edge,
-        t,
-        speed: 0.02 + Math.random() * 0.04,
-        state: 'moving',
-        waitUntil: 0,
-        currentLonLat: [lon, lat],
-      };
-      vehiclesRef.current.push(v);
-    }
-  };
-
-  const onPostRender = () => {
-    const now = Date.now();
-    const dt = (now - lastTrafficTime.current) / 1000;
-    lastTrafficTime.current = now;
-
-    const camPos = viewer.camera.positionCartographic;
-    const camLon = Cesium.Math.toDegrees(camPos.longitude);
-    const camLat = Cesium.Math.toDegrees(camPos.latitude);
-
-    vehiclesRef.current.forEach((v) => {
-      const [lon0, lat0] = v.currentLonLat;
-      const dLon = lon0 - camLon;
-      const dLat = lat0 - camLat;
-      const dist2 = dLon * dLon + dLat * dLat;
-      v.entity.show = dist2 < 0.05 * 0.05; // ~5–6km radius
-
-      if (!v.entity.show) return;
-
-      if (v.state === 'waiting') {
-        if (now < v.waitUntil) return;
-        v.state = 'moving';
-      }
-
-      v.t += v.speed * dt;
-      if (v.t >= 1) {
-        // At intersection
-        const graphEntries = Array.from(roadGraphCacheRef.current.values());
-        const graph = graphEntries[0]; // simple: use first graph; can be improved
-        if (!graph) return;
-
-        const node = graph.nodes.get(v.edge.to);
-        if (!node || node.outgoing.length === 0) {
-          v.t -= 1;
-        } else {
-          // Traffic light logic
-          if (!isEdgeGreen(v.edge, now)) {
-            v.state = 'waiting';
-            v.waitUntil = now + 3000 + Math.random() * 3000;
-            v.t = 1; // stay at end
-          } else {
-            const nextEdge = node.outgoing[Math.floor(Math.random() * node.outgoing.length)];
-            v.edge = nextEdge;
-            v.t = 0;
-          }
-        }
-      }
-
-      const [lon, lat] = interpolateRoad(v.edge.coords, v.t);
-      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-      v.currentLonLat = [lon, lat];
-      v.entity.position = Cesium.Cartesian3.fromDegrees(lon, lat, 3);
-    });
-  };
-
-  viewer.scene.postRender.addEventListener(onPostRender);
-
   const checkZoom = () => {
     clearTimeout(timeout);
+
     timeout = setTimeout(async () => {
       const height = viewer.camera.positionCartographic?.height;
-      if (!height || height > 150000) return;
+
+      // Allow up to ~150km altitude
+      if (!height || height > 150000) {
+        ds.entities.removeAll();
+        vehiclesRef.current = [];
+        trafficFetchedBbox.current = '';
+        return;
+      }
 
       const rect = viewer.camera.computeViewRectangle();
       if (!rect) return;
@@ -1350,13 +1158,74 @@ useEffect(() => {
       const n = Cesium.Math.toDegrees(rect.north);
       const e = Cesium.Math.toDegrees(rect.east);
 
-      if (n - s > 0.01 || e - w > 0.01) return; // ~1km tile
+      // Tight bounding box: ~2km around camera
+      if (n - s > 0.02 || e - w > 0.02) return;
 
-      const graph = await getOrBuildGraph(s, w, n, e);
-      if (!graph) return;
+      const bk = `${s.toFixed(4)},${w.toFixed(4)},${n.toFixed(4)},${e.toFixed(4)}`;
 
-      spawnVehiclesOnGraph(graph);
-    }, 200);
+      // Only skip if we already have vehicles
+      if (bk === trafficFetchedBbox.current && vehiclesRef.current.length > 0) return;
+      trafficFetchedBbox.current = bk;
+
+      const data = await fetchRoads(s, w, n, e);
+      if (!data) return;
+
+      ds.entities.removeAll();
+      vehiclesRef.current = [];
+
+      const roads: number[][][] = [];
+      const nodeToRoads = new Map<string, number[]>();
+
+      (data.elements || []).forEach((way: any, roadIdx: number) => {
+        if (!way.geometry || way.geometry.length < 2) return;
+
+        const coords = way.geometry.map((nd: any) => [nd.lon, nd.lat]);
+        roads.push(coords);
+
+        const startKey = `${coords[0][0].toFixed(5)},${coords[0][1].toFixed(5)}`;
+        const endKey = `${coords.at(-1)![0].toFixed(5)},${coords.at(-1)![1].toFixed(5)}`;
+
+        [startKey, endKey].forEach((k) => {
+          if (!nodeToRoads.has(k)) nodeToRoads.set(k, []);
+          nodeToRoads.get(k)!.push(roadIdx);
+        });
+      });
+
+      roads.forEach((coords, roadIdx) => {
+        const endKey = `${coords.at(-1)![0].toFixed(5)},${coords.at(-1)![1].toFixed(5)}`;
+        const connectedIdxs = (nodeToRoads.get(endKey) || []).filter((i) => i !== roadIdx);
+        const nextPaths = connectedIdxs.map((i) => roads[i]);
+
+        // Dense traffic: up to 20 vehicles per road
+        const count = Math.min(Math.floor(coords.length / 2), 20);
+
+        for (let i = 0; i < count; i++) {
+          const progress = Math.random();
+          const [lon, lat] = interpolateRoad(coords, progress);
+          if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+
+          const entity = ds.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, 3),
+            point: {
+              pixelSize: 4,
+              color: vehColor,
+              outlineColor: vehColor.withAlpha(0.3),
+              outlineWidth: 2,
+              disableDepthTestDistance: 0,
+            },
+          });
+
+          vehiclesRef.current.push({
+            entity,
+            coords,
+            progress,
+            speed: 0.02 + Math.random() * 0.04,
+            direction: Math.random() > 0.5 ? 1 : -1,
+            nextPaths,
+          });
+        }
+      });
+    }, 200); // fast adaptive updates
   };
 
   viewer.camera.changed.addEventListener(checkZoom);
