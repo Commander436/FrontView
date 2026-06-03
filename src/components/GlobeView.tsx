@@ -265,6 +265,24 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+    // ---------- DOUBLE-CLICK → spawn 3D model + camera follow ----------
+    handler.setInputAction((click: any) => {
+      const picked = viewer.scene.pick(click.position);
+      if (!Cesium.defined(picked) || !picked.id) return;
+      let entityType: string | undefined;
+      let data: any;
+      try {
+        entityType = picked.id.properties?.entityType?.getValue();
+        const raw = picked.id.properties?.entityData?.getValue();
+        if (raw) data = JSON.parse(raw);
+      } catch { return; }
+      if (!entityType || !data) return;
+      if (entityType !== 'aircraft' && entityType !== 'ship') return;
+
+      const id = entityType === 'aircraft' ? data.icao24 : data.mmsi;
+      spawnModelFor(entityType as 'aircraft' | 'ship', id, data, picked.id);
+    }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
     viewerRef.current = viewer;
     (window as any).__cesiumViewer = viewer;
     viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(20, 20, 20000000), duration: 0 });
