@@ -19,9 +19,11 @@ declare const Cesium: any;
 // ---- SVG Icon Data URIs ----
 const mkIcon = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
 
-const ICON_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="white" stroke="white" stroke-width="0.3"><path d="M12 2L14 8H20L14.5 12L16 20H12L10 15L4 17L6 12L4 7H10Z"/></g></svg>`);
-const ICON_MIL_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="#ff8c00" stroke="#ff6600" stroke-width="0.5"><path d="M12 1L15 9H22L15 13L17 22H12L10 16L2 18L5 12L2 6H10Z"/></g></svg>`);
-const ICON_UNKNOWN_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><g fill="none" stroke="#aaaaaa" stroke-width="1.5"><path d="M12 4L18 12L12 20L6 12Z"/></g></svg>`);
+// High-contrast vector silhouettes with a soft outer glow. Rendered at 2x for
+// crisp scaling. Always billboarded, rotated to the entity heading.
+const ICON_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><defs><filter id="g" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#g)" fill="#ffffff" stroke="#000000" stroke-width="0.6" stroke-linejoin="round"><path d="M24 3 L26 19 L45 26 L45 30 L26 27 L25 39 L31 42 L31 45 L24 43 L17 45 L17 42 L23 39 L22 27 L3 30 L3 26 L22 19 Z"/></g></svg>`);
+const ICON_MIL_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><defs><filter id="gm" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#gm)" fill="#ff8c1a" stroke="#1a0a00" stroke-width="0.7" stroke-linejoin="round"><path d="M24 2 L27 18 L46 28 L46 31 L27 29 L26 38 L33 43 L33 46 L24 43 L15 46 L15 43 L22 38 L21 29 L2 31 L2 28 L21 18 Z"/></g></svg>`);
+const ICON_UNKNOWN_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><g fill="#c0c0c0" stroke="#000" stroke-width="0.5" stroke-linejoin="round"><path d="M24 6 L36 24 L24 42 L12 24 Z" opacity="0.85"/></g></svg>`);
 const ICON_SAT = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#f59e0b" stroke="#d97706" stroke-width="0.3"><rect x="1" y="6" width="5" height="4" rx="0.5"/><rect x="10" y="6" width="5" height="4" rx="0.5"/><rect x="6" y="5" width="4" height="6" rx="1" fill="#fbbf24"/><circle cx="8" cy="8" r="1.5" fill="#d97706"/></g></svg>`);
 const ICON_BASE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M9 1L16 5V10C16 14 12.5 17 9 17C5.5 17 2 14 2 10V5Z" fill="#39ff1440" stroke="#39ff14" stroke-width="1"/><polygon points="9,5 10.2,7.5 13,7.8 11,9.7 11.5,12.5 9,11.2 6.5,12.5 7,9.7 5,7.8 7.8,7.5" fill="#39ff14"/></svg>`);
 const ICON_CITY = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.3"><rect x="2" y="8" width="3" height="7"/><rect x="6" y="4" width="4" height="11"/><rect x="11" y="6" width="3" height="9"/><rect x="7" y="1" width="2" height="3" fill="#94a3b8"/></g></svg>`);
@@ -56,10 +58,24 @@ function annMaterial(color: any, style: string) {
   return color;
 }
 
-const SHIP_COLORS: Record<string, string> = { cargo: '#3b82f6', tanker: '#f59e0b', passenger: '#8b5cf6', fishing: '#10b981', military: '#ef4444' };
+const SHIP_COLORS: Record<string, string> = {
+  cargo: '#3b82f6',     // blue cargo silhouette
+  tanker: '#f59e0b',
+  passenger: '#ffffff', // white cruise silhouette
+  fishing: '#10b981',
+  military: '#ef4444',
+};
 function makeShipIcon(type: string) {
   const c = SHIP_COLORS[type] || '#3b82f6';
-  return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><path d="M8 2L13 10H3Z" fill="${c}" stroke="${c}" stroke-width="0.3"/><line x1="8" y1="10" x2="8" y2="14" stroke="${c}" stroke-width="1"/></svg>`);
+  // Distinct silhouettes per class. All face "up" so billboard rotation matches heading.
+  if (type === 'passenger') {
+    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g fill="${c}" stroke="#000" stroke-width="0.6" stroke-linejoin="round"><path d="M20 3 L23 12 L23 22 L31 26 L31 30 L9 30 L9 26 L17 22 L17 12 Z"/><rect x="18" y="14" width="4" height="2"/><rect x="18" y="18" width="4" height="2"/></g></svg>`);
+  }
+  if (type === 'cargo' || type === 'tanker') {
+    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g fill="${c}" stroke="#000" stroke-width="0.6" stroke-linejoin="round"><path d="M20 3 L24 14 L32 28 L8 28 L16 14 Z"/><rect x="14" y="18" width="12" height="3"/><rect x="14" y="22" width="12" height="3"/></g></svg>`);
+  }
+  // generic / fishing / military
+  return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g fill="${c}" stroke="#000" stroke-width="0.6" stroke-linejoin="round"><path d="M20 4 L26 16 L32 30 L8 30 L14 16 Z"/></g></svg>`);
 }
 
 function getInfraIcon(type: string) {
