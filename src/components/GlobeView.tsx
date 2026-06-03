@@ -317,6 +317,10 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
     handler.setInputAction((click: any) => {
       const picked = viewer.scene.pick(click.position);
+      // Click on empty space → despawn any active 3D model
+      if (!Cesium.defined(picked) || !picked.id) {
+        if (modelEntityRef.current) despawnModel();
+      }
       if (Cesium.defined(picked) && picked.id) {
         try {
           const entityType = picked.id.properties?.entityType?.getValue();
