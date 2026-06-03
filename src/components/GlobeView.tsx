@@ -178,6 +178,97 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   const postStagesRef = useRef<Record<string, any>>({});
   const activeStageRef = useRef<any>(null);
 
+  // -------- 3D model spawn helpers --------
+  const MODEL_URIS: Record<string, string> = {
+    'aircraft-civilian': 'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumAir/Cesium_Air.glb',
+    'aircraft-military': 'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumAir/Cesium_Air.glb',
+    'ship-cargo':        'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumMilkTruck/CesiumMilkTruck.glb',
+    'ship-passenger':    'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumMilkTruck/CesiumMilkTruck.glb',
+  };
+
+  const despawnModel = useCallback(() => {
+    const viewer = viewerRef.current;
+    const m = modelEntityRef.current;
+    if (viewer && m) {
+      try { viewer.entities.remove(m); } catch { /* noop */ }
+    }
+    modelEntityRef.current = null;
+    // Restore source billboard visibility
+    const owner = modelOwnerRef.current;
+    if (owner) {
+      const src = owner.kind === 'aircraft'
+        ? aircraftEntities.current.get(owner.id)
+        : shipEntities.current.get(owner.id);
+      if (src?.billboard) src.billboard.show = true;
+    }
+    modelOwnerRef.current = null;
+    if (viewer) viewer.trackedEntity = undefined;
+  }, []);
+
+  const spawnModelFor = useCallback((kind: 'aircraft' | 'ship', id: string, data: any, sourceEntity: any) => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    despawnModel();
+
+    let uriKey: string;
+    if (kind === 'aircraft') {
+      uriKey = (data.isMilitary || data.militaryClassification) ? 'aircraft-military' : 'aircraft-civilian';
+    } else {
+      uriKey = data.type === 'passenger' ? 'ship-passenger' : 'ship-cargo';
+    }
+    const uri = MODEL_URIS[uriKey];
+    if (!uri) return;
+
+    const heading = kind === 'aircraft' ? (data.heading || 0) : (data.course || 0);
+    const hpr = new Cesium.HeadingPitchRoll(
+      Cesium.Math.toRadians(heading),
+      0,
+      0,
+    );
+    const orientation = new Cesium.CallbackProperty(() => {
+      const pos = sourceEntity.position?.getValue(viewer.clock.currentTime);
+      if (!pos) return Cesium.Transforms.headingPitchRollQuaternion(Cesium.Cartesian3.ZERO, hpr);
+      return Cesium.Transforms.headingPitchRollQuaternion(pos, hpr);
+    }, false);
+
+    const modelEntity = viewer.entities.add({
+      position: sourceEntity.position, // shares SampledPositionProperty
+      orientation,
+      model: {
+        uri,
+        minimumPixelSize: 64,
+        maximumScale: kind === 'aircraft' ? 20000 : 30000,
+        scale: kind === 'aircraft' ? 1.5 : 1.0,
+        silhouetteColor: kind === 'aircraft' && uriKey === 'aircraft-military'
+          ? Cesium.Color.fromCssColorString('#ff8c1a')
+          : Cesium.Color.WHITE,
+        silhouetteSize: 1.5,
+      },
+      properties: sourceEntity.properties,
+    });
+    modelEntityRef.current = modelEntity;
+    modelOwnerRef.current = { kind, id };
+
+    // Hide the source 2D icon while model is up
+    if (sourceEntity.billboard) sourceEntity.billboard.show = false;
+
+    // Camera: orbit slightly behind & above the model. Distance scales with speed.
+    const speed = kind === 'aircraft' ? (data.velocity || 200) : (data.speed || 10);
+    const range = kind === 'aircraft'
+      ? Math.max(1500, Math.min(15000, speed * 30))
+      : Math.max(400, Math.min(4000, speed * 60));
+    viewer.flyTo(modelEntity, {
+      duration: 1.2,
+      offset: new Cesium.HeadingPitchRange(
+        Cesium.Math.toRadians(heading + 180),
+        Cesium.Math.toRadians(-20),
+        range,
+      ),
+    }).then(() => {
+      try { viewer.trackedEntity = modelEntity; } catch { /* noop */ }
+    }).catch(() => { /* noop */ });
+  }, [despawnModel]);
+
   // ========== INIT VIEWER ==========
   useEffect(() => {
     if (!containerRef.current || viewerRef.current) return;
