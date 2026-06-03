@@ -472,6 +472,8 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         if (posProperty && posProperty.addSample) {
           posProperty.addSample(future, newPos);
         }
+        existing.billboard.image = makeShipIcon(s.type);
+        existing.billboard.rotation = Cesium.Math.toRadians(-(s.course || 0));
         existing.properties.entityData = JSON.stringify(s);
       } else {
         const posProperty = new Cesium.SampledPositionProperty();
@@ -483,9 +485,11 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
           id: `ship-${s.mmsi}`,
           position: posProperty,
           billboard: {
-            image: makeShipIcon(s.type), width: 16, height: 16,
+            image: makeShipIcon(s.type), width: 22, height: 22,
+            rotation: Cesium.Math.toRadians(-(s.course || 0)),
+            alignedAxis: Cesium.Cartesian3.UNIT_Z,
             disableDepthTestDistance: 0,
-            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.5, 2e7, 0.5),
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.8, 2e7, 0.45),
           },
           properties: { entityType: 'ship', entityData: JSON.stringify(s) },
         });
