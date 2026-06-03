@@ -390,6 +390,167 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     };
   }, []);
 
+  // ========== POST-PROCESSING FILTERS (NVG / CRT / FLIR) ==========
+  // Applies a real GLSL fragment shader to the entire scene (including HUD,
+  // labels, icons, and entities) via Cesium PostProcessStage. No CSS filters,
+  // no DOM overlays. Switching mode swaps the stage with a smooth crossfade
+  // driven by a uniform.
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || typeof Cesium === 'undefined') return;
+
+    const stages = viewer.scene.postProcessStages;
+
+    // Tear down any prior stage
+    if (activeStageRef.current) {
+      try { stages.remove(activeStageRef.current); } catch { /* noop */ }
+      activeStageRef.current = null;
+    }
+
+    if (displayMode === 'normal') return;
+
+    // Shared GLSL utilities (legacy syntax — Cesium auto-translates to GLSL3)
+    const common = `
+      uniform sampler2D colorTexture;
+      uniform float u_intensity;
+      uniform float u_time;
+      varying vec2 v_textureCoordinates;
+      float rand(vec2 co){ return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453); }
+      vec3 lum(vec3 c){ float g = dot(c, vec3(0.299,0.587,0.114)); return vec3(g); }
+    `;
+
+    let fragmentShader = '';
+    if (displayMode === 'nvg') {
+      fragmentShader = `${common}
+        void main() {
+          vec2 uv = v_textureCoordinates;
+          // chromatic aberration + slight zoom-in
+          vec2 c = uv - 0.5;
+          uv = 0.5 + c * (1.0 - 0.02 * u_intensity);
+          float ca = 0.002 * u_intensity;
+          vec3 col;
+          col.r = texture2D(colorTexture, uv + vec2(ca, 0.0)).r;
+          col.g = texture2D(colorTexture, uv).g;
+          col.b = texture2D(colorTexture, uv - vec2(ca, 0.0)).b;
+          // NVG green LUT (desaturate -> map to green)
+          float g = dot(col, vec3(0.299,0.587,0.114));
+          g = pow(g, 0.9) * 1.25;
+          vec3 nvg = vec3(0.05, 1.0, 0.18) * g;
+          // grain
+          float n = (rand(uv * vec2(1024.0,1024.0) + u_time) - 0.5) * 0.12 * u_intensity;
+          nvg += n;
+          // vignette + circular scope mask
+          float d = length(uv - 0.5);
+          float vig = smoothstep(0.78, 0.32, d);
+          nvg *= mix(1.0, vig, u_intensity);
+          // edge contrast
+          nvg = mix(nvg, smoothstep(0.0, 1.0, nvg), 0.25);
+          gl_FragColor = vec4(nvg, 1.0);
+        }
+      `;
+    } else if (displayMode === 'crt') {
+      fragmentShader = `${common}
+        void main() {
+          vec2 uv = v_textureCoordinates;
+          // slight barrel distortion (zoom-out a touch)
+          vec2 c = uv - 0.5;
+          float r2 = dot(c, c);
+          uv = 0.5 + c * (1.0 + 0.10 * r2 * u_intensity);
+          // subtle jitter
+          uv.x += (rand(vec2(u_time, uv.y)) - 0.5) * 0.0015 * u_intensity;
+          // RGB split
+          float s = 0.0025 * u_intensity;
+          vec3 col;
+          col.r = texture2D(colorTexture, uv + vec2(s, 0.0)).r;
+          col.g = texture2D(colorTexture, uv).g;
+          col.b = texture2D(colorTexture, uv - vec2(s, 0.0)).b;
+          // phosphor tint (pale green/white)
+          col = mix(col, col * vec3(0.85, 1.05, 0.90), 0.4 * u_intensity);
+          // scanlines
+          float sl = sin(uv.y * 900.0) * 0.5 + 0.5;
+          col *= mix(1.0, mix(0.75, 1.0, sl), u_intensity);
+          // noise
+          col += (rand(uv * 800.0 + u_time) - 0.5) * 0.05 * u_intensity;
+          // bloom-ish lift
+          col += max(col - 0.7, 0.0) * 0.4;
+          // contrast
+          col = mix(vec3(0.5), col, 1.15);
+          // vignette
+          float d = length(uv - 0.5);
+          col *= smoothstep(0.95, 0.4, d) * 0.5 + 0.6;
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `;
+    } else if (displayMode === 'flir') {
+      fragmentShader = `${common}
+        // White-hot thermal LUT
+        vec3 thermal(float t) {
+          t = clamp(t, 0.0, 1.0);
+          vec3 c1 = vec3(0.0, 0.0, 0.0);
+          vec3 c2 = vec3(0.20, 0.0, 0.40);
+          vec3 c3 = vec3(0.85, 0.20, 0.0);
+          vec3 c4 = vec3(1.0, 0.85, 0.0);
+          vec3 c5 = vec3(1.0, 1.0, 1.0);
+          if (t < 0.25) return mix(c1, c2, t / 0.25);
+          if (t < 0.50) return mix(c2, c3, (t - 0.25) / 0.25);
+          if (t < 0.80) return mix(c3, c4, (t - 0.50) / 0.30);
+          return mix(c4, c5, (t - 0.80) / 0.20);
+        }
+        void main() {
+          vec2 uv = v_textureCoordinates;
+          vec3 col = texture2D(colorTexture, uv).rgb;
+          float l = dot(col, vec3(0.299, 0.587, 0.114));
+          // increase heat contrast & exposure
+          l = clamp((l - 0.1) * 1.6, 0.0, 1.0);
+          vec3 t = thermal(l);
+          // noise
+          t += (rand(uv * 600.0 + u_time) - 0.5) * 0.04 * u_intensity;
+          // bloom on hot spots
+          t += max(t - 0.75, 0.0) * 0.6;
+          gl_FragColor = vec4(mix(col, t, u_intensity), 1.0);
+        }
+      `;
+    }
+
+    if (!fragmentShader) return;
+
+    // Crossfade in: animate u_intensity 0 → 1 over ~350ms.
+    let intensity = 0.0;
+    const stage = new Cesium.PostProcessStage({
+      fragmentShader,
+      uniforms: {
+        u_intensity: () => intensity,
+        u_time: () => (performance.now() / 1000.0) % 1000.0,
+      },
+    });
+    stages.add(stage);
+    activeStageRef.current = stage;
+
+    const start = performance.now();
+    let raf = 0;
+    const tick = () => {
+      const t = Math.min(1, (performance.now() - start) / 350);
+      intensity = t;
+      viewer.scene.requestRender();
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      try { stages.remove(stage); } catch { /* noop */ }
+      if (activeStageRef.current === stage) activeStageRef.current = null;
+    };
+  }, [displayMode]);
+
+  // Despawn 3D model when layer ownership disappears
+  useEffect(() => {
+    const owner = modelOwnerRef.current;
+    if (!owner) return;
+    if (owner.kind === 'aircraft' && !layers.aircraft && !layers.militaryFlights) despawnModel();
+    if (owner.kind === 'ship' && !layers.ships) despawnModel();
+  }, [layers.aircraft, layers.militaryFlights, layers.ships, despawnModel]);
+
   // ========== AIRCRAFT (persistent, incremental, AWACS overlays) ==========
   useEffect(() => {
     const ds = dsRefs.current['aircraft'];
