@@ -3,7 +3,7 @@ import cors from "cors";
 import { WebSocket } from "ws";
 
 const AIS_WS_URL = "wss://stream.aisstream.io/v0/stream";
-const AIS_API_KEY = process.env.AISSTREAM_API_KEY; // Render will inject this
+const AIS_API_KEY = process.env.AISSTREAM_API_KEY;
 const PORT = process.env.PORT || 4000;
 
 const app = express();
@@ -14,7 +14,11 @@ app.get("/api/ais", (req, res) => {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  const ws = new WebSocket(AIS_WS_URL);
+  const ws = new WebSocket(AIS_WS_URL, {
+    headers: {
+      "x-api-key": AIS_API_KEY
+    }
+  });
 
   ws.on("open", () => {
     ws.send(
@@ -23,10 +27,10 @@ app.get("/api/ais", (req, res) => {
         BoundingBoxes: [
           {
             NorthEast: { lat: 90, lon: 180 },
-            SouthWest: { lat: -90, lon: -180 },
-          },
+            SouthWest: { lat: -90, lon: -180 }
+          }
         ],
-        FilterMessageTypes: ["PositionReport"],
+        FilterMessageTypes: ["PositionReport"]
       })
     );
   });
@@ -35,17 +39,10 @@ app.get("/api/ais", (req, res) => {
     res.write(`data: ${data.toString()}\n\n`);
   });
 
-  ws.on("close", () => {
-    res.end();
-  });
+  ws.on("close", () => res.end());
+  ws.on("error", () => res.end());
 
-  ws.on("error", (err) => {
-    res.write(`event: error\ndata: "AIS backend error: ${err.message}"\n\n`);
-  });
-
-  req.on("close", () => {
-    ws.close();
-  });
+  req.on("close", () => ws.close());
 });
 
 app.listen(PORT, () => {
