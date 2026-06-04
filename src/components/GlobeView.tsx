@@ -395,8 +395,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
 //  Cesium 1.119+ compatible (WebGL2 / GLSL 300 ES)
 // ===============================================================
 
-const activeStageRef = useRef<Cesium.PostProcessStage | null>(null);
-
 useEffect(() => {
   const viewer = viewerRef.current;
   if (!viewer || typeof window === 'undefined' || !(window as any).Cesium) return;
