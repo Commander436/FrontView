@@ -392,8 +392,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
 
 // ===============================================================
 //  POST-PROCESSING FILTERS (NVG / CRT / FLIR)
-//  Real GLSL shaders applied to the entire Cesium scene.
-//  No CSS overlays. No DOM tinting. No fake effects.
+//  Cesium 1.119+ compatible (WebGL2 / GLSL 300 ES)
 // ===============================================================
 
 const activeStageRef = useRef<Cesium.PostProcessStage | null>(null);
@@ -414,12 +413,17 @@ useEffect(() => {
   // Normal mode = no shader
   if (displayMode === 'normal') return;
 
-  // Shared GLSL utilities
-  const common = `
+  // Shared GLSL header (GLSL 300 ES)
+  const header = `
+    #version 300 es
+    precision highp float;
+
     uniform sampler2D colorTexture;
     uniform float u_intensity;
     uniform float u_time;
-    varying vec2 v_textureCoordinates;
+
+    in vec2 v_textureCoordinates;
+    out vec4 fragColor;
 
     float rand(vec2 co){
       return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
@@ -437,7 +441,8 @@ useEffect(() => {
   // NVG MODE
   // ===============================================================
   if (displayMode === 'nvg') {
-    fragmentShader = `${common}
+    fragmentShader = `
+      ${header}
       void main() {
         vec2 uv = v_textureCoordinates;
 
@@ -447,9 +452,9 @@ useEffect(() => {
         float ca = 0.002 * u_intensity;
 
         vec3 col;
-        col.r = texture2D(colorTexture, uv + vec2(ca, 0.0)).r;
-        col.g = texture2D(colorTexture, uv).g;
-        col.b = texture2D(colorTexture, uv - vec2(ca, 0.0)).b;
+        col.r = texture(colorTexture, uv + vec2(ca, 0.0)).r;
+        col.g = texture(colorTexture, uv).g;
+        col.b = texture(colorTexture, uv - vec2(ca, 0.0)).b;
 
         // Green NVG LUT
         float g = dot(col, vec3(0.299,0.587,0.114));
@@ -465,7 +470,7 @@ useEffect(() => {
         float vig = smoothstep(0.78, 0.32, d);
         nvg *= mix(1.0, vig, u_intensity);
 
-        gl_FragColor = vec4(nvg, 1.0);
+        fragColor = vec4(nvg, 1.0);
       }
     `;
   }
@@ -474,7 +479,8 @@ useEffect(() => {
   // CRT MODE
   // ===============================================================
   else if (displayMode === 'crt') {
-    fragmentShader = `${common}
+    fragmentShader = `
+      ${header}
       void main() {
         vec2 uv = v_textureCoordinates;
 
@@ -489,9 +495,9 @@ useEffect(() => {
         // RGB split
         float s = 0.0025 * u_intensity;
         vec3 col;
-        col.r = texture2D(colorTexture, uv + vec2(s, 0.0)).r;
-        col.g = texture2D(colorTexture, uv).g;
-        col.b = texture2D(colorTexture, uv - vec2(s, 0.0)).b;
+        col.r = texture(colorTexture, uv + vec2(s, 0.0)).r;
+        col.g = texture(colorTexture, uv).g;
+        col.b = texture(colorTexture, uv - vec2(s, 0.0)).b;
 
         // Phosphor tint
         col = mix(col, col * vec3(0.85, 1.05, 0.90), 0.4 * u_intensity);
@@ -510,7 +516,7 @@ useEffect(() => {
         float d = length(uv - 0.5);
         col *= smoothstep(0.95, 0.4, d) * 0.5 + 0.6;
 
-        gl_FragColor = vec4(col, 1.0);
+        fragColor = vec4(col, 1.0);
       }
     `;
   }
@@ -519,7 +525,9 @@ useEffect(() => {
   // FLIR MODE
   // ===============================================================
   else if (displayMode === 'flir') {
-    fragmentShader = `${common}
+    fragmentShader = `
+      ${header}
+
       vec3 thermal(float t) {
         t = clamp(t, 0.0, 1.0);
         vec3 c1 = vec3(0.0, 0.0, 0.0);
@@ -536,7 +544,7 @@ useEffect(() => {
 
       void main() {
         vec2 uv = v_textureCoordinates;
-        vec3 col = texture2D(colorTexture, uv).rgb;
+        vec3 col = texture(colorTexture, uv).rgb;
 
         // Luminance → heat
         float l = dot(col, vec3(0.299, 0.587, 0.114));
@@ -550,7 +558,7 @@ useEffect(() => {
         // Bloom on hot spots
         t += max(t - 0.75, 0.0) * 0.6;
 
-        gl_FragColor = vec4(mix(col, t, u_intensity), 1.0);
+        fragColor = vec4(mix(col, t, u_intensity), 1.0);
       }
     `;
   }
