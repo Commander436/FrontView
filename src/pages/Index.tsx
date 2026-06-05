@@ -54,7 +54,7 @@ const Index = () => {
     pendingPoint, setPendingPoint,
     addPoint, addLine, addSquare, addCircle, addTriangle, addCustom,
     updateColor, updateTitle, updateStyle, updateIcon, remove, clearAll,
-  } = useAnnotations(aircraft);
+  } = useAnnotations(aircraft, liveShips, satellites);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
   const [cameraHeading, setCameraHeading] = useState(0);
