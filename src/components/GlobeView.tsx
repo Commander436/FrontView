@@ -172,7 +172,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
 
   // 3D model spawn state (one model at a time)
   const modelEntityRef = useRef<any>(null);
-  const modelOwnerRef = useRef<{ kind: 'aircraft' | 'ship'; id: string } | null>(null);
+  const modelOwnerRef = useRef<{ kind: 'aircraft' | 'ship' | 'satellite'; id: string } | null>(null);
 
   // Post-processing stage instances keyed by display mode
   const postStagesRef = useRef<Record<string, any>>({});
@@ -207,7 +207,9 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     if (owner) {
       const src = owner.kind === 'aircraft'
         ? aircraftEntities.current.get(owner.id)
-        : shipEntities.current.get(owner.id);
+        : owner.kind === 'ship'
+        ? shipEntities.current.get(owner.id)
+        : satEntities.current.get(owner.id);
       if (src?.billboard) src.billboard.show = true;
     }
     modelOwnerRef.current = null;
@@ -269,14 +271,19 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     if (sourceEntity.billboard) sourceEntity.billboard.show = false;
 
     // Camera: orbit slightly behind & above the model. Distance scales with speed.
-    const speed = kind === 'aircraft' ? (data.velocity || 200) : (data.speed || 10);
-    const range = kind === 'aircraft'
-      ? Math.max(1500, Math.min(15000, speed * 30))
-      : Math.max(400, Math.min(4000, speed * 60));
+    const initialHeading = kind === 'aircraft' ? (data.heading ?? data.track ?? 0)
+                         : kind === 'ship'     ? (data.course  ?? data.heading ?? 0)
+                         : 0;
+    const speed = kind === 'aircraft' ? (data.velocity || 200)
+                : kind === 'ship'     ? (data.speed || 10)
+                : 100;
+    const range = kind === 'aircraft' ? Math.max(1500, Math.min(15000, speed * 30))
+                : kind === 'ship'     ? Math.max(400,  Math.min(4000,  speed * 60))
+                : 5000000;
     viewer.flyTo(modelEntity, {
       duration: 1.2,
       offset: new Cesium.HeadingPitchRange(
-        Cesium.Math.toRadians(heading + 180),
+        Cesium.Math.toRadians(initialHeading + 180),
         Cesium.Math.toRadians(-20),
         range,
       ),
