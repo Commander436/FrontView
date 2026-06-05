@@ -54,7 +54,7 @@ const Index = () => {
     pendingPoint, setPendingPoint,
     addPoint, addLine, addSquare, addCircle, addTriangle, addCustom,
     updateColor, updateTitle, updateStyle, updateIcon, remove, clearAll,
-  } = useAnnotations(aircraft);
+  } = useAnnotations(aircraft, liveShips, satellites);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [cameraCoords, setCameraCoords] = useState({ lat: 0, lon: 0 });
   const [cameraHeading, setCameraHeading] = useState(0);
@@ -222,7 +222,7 @@ const Index = () => {
       />
       </div>
       <main className="flex-1 relative min-w-0">
-        <div className={`w-full h-full ${introAnim ? 'intro-globe-in' : ''}`}>
+        <div className={`relative w-full h-full ${introAnim ? 'intro-globe-in' : ''}`}>
           <GlobeView
             layers={layers}
             aircraft={aircraft}
@@ -236,8 +236,16 @@ const Index = () => {
             drawingTool={drawingTool}
             onDrawComplete={handleDrawComplete}
           />
+          <ScopeOverlay
+            mode={
+              displayMode !== 'normal'
+                ? displayMode
+                : showScope
+                ? 'scope-only'
+                : 'normal'
+            }
+          />
         </div>
-        {showScope && <ScopeOverlay mode="scope-only" />}
 
         {/* Unified bottom-center tactical dock */}
         <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-30 ${introAnim ? 'intro-bottom-in' : ''}`}>

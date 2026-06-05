@@ -55,6 +55,9 @@ export interface LineAnnotation extends AnnotationBase {
   crossedTotal: number;
   crossedCivilian: number;
   crossedMilitary: number;
+  crossedCargo?: number;
+  crossedPassenger?: number;
+  crossedSatellite?: number;
   style?: LineStyle;
 }
 
@@ -68,6 +71,9 @@ export interface SquareAnnotation extends AnnotationBase {
   exitedTotal: number;
   civilianInside: number;
   militaryInside: number;
+  cargoInside?: number;
+  passengerInside?: number;
+  satelliteInside?: number;
   style?: LineStyle; // solid|dashed|dotted (arrow ignored)
 }
 
@@ -80,6 +86,9 @@ export interface CircleAnnotation extends AnnotationBase {
   exitedTotal: number;
   civilianInside: number;
   militaryInside: number;
+  cargoInside?: number;
+  passengerInside?: number;
+  satelliteInside?: number;
   style?: LineStyle;
 }
 
@@ -91,6 +100,9 @@ export interface TriangleAnnotation extends AnnotationBase {
   exitedTotal: number;
   civilianInside: number;
   militaryInside: number;
+  cargoInside?: number;
+  passengerInside?: number;
+  satelliteInside?: number;
   style?: LineStyle;
 }
 
@@ -105,10 +117,16 @@ export interface CustomAnnotation extends AnnotationBase {
   exitedTotal: number;
   civilianInside: number;
   militaryInside: number;
+  cargoInside?: number;
+  passengerInside?: number;
+  satelliteInside?: number;
   // Line analytics (only meaningful when open)
   crossedTotal: number;
   crossedCivilian: number;
   crossedMilitary: number;
+  crossedCargo?: number;
+  crossedPassenger?: number;
+  crossedSatellite?: number;
   style?: LineStyle;
 }
 

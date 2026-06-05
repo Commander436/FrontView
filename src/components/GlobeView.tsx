@@ -172,18 +172,27 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
 
   // 3D model spawn state (one model at a time)
   const modelEntityRef = useRef<any>(null);
-  const modelOwnerRef = useRef<{ kind: 'aircraft' | 'ship'; id: string } | null>(null);
+  const modelOwnerRef = useRef<{ kind: 'aircraft' | 'ship' | 'satellite'; id: string } | null>(null);
 
   // Post-processing stage instances keyed by display mode
   const postStagesRef = useRef<Record<string, any>>({});
   const activeStageRef = useRef<any>(null);
 
   // -------- 3D model spawn helpers --------
+  // Realistic free models (no API key needed)
   const MODEL_URIS: Record<string, string> = {
-    'aircraft-civilian': 'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumAir/Cesium_Air.glb',
-    'aircraft-military': 'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumAir/Cesium_Air.glb',
-    'ship-cargo':        'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumMilkTruck/CesiumMilkTruck.glb',
-    'ship-passenger':    'https://cdn.jsdelivr.net/gh/CesiumGS/cesium@1.110/Apps/SampleData/models/CesiumMilkTruck/CesiumMilkTruck.glb',
+    'aircraft-civilian': 'https://models.babylonjs.com/CesiumAir/Cesium_Air.glb',
+    'aircraft-military': 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/F16/glTF/F16.gltf',
+    'ship-cargo':        'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CargoShip/glTF/CargoShip.gltf',
+    'ship-passenger':    'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF/CesiumMilkTruck.gltf',
+    'satellite':         'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/ISS/glTF/ISS.gltf',
+  };
+  const MODEL_SCALE: Record<string, number> = {
+    'aircraft-civilian': 120,
+    'aircraft-military': 80,
+    'ship-cargo':        200,
+    'ship-passenger':    200,
+    'satellite':         5000,
   };
 
   const despawnModel = useCallback(() => {
@@ -198,14 +207,16 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     if (owner) {
       const src = owner.kind === 'aircraft'
         ? aircraftEntities.current.get(owner.id)
-        : shipEntities.current.get(owner.id);
+        : owner.kind === 'ship'
+        ? shipEntities.current.get(owner.id)
+        : satEntities.current.get(owner.id);
       if (src?.billboard) src.billboard.show = true;
     }
     modelOwnerRef.current = null;
     if (viewer) viewer.trackedEntity = undefined;
   }, []);
 
-  const spawnModelFor = useCallback((kind: 'aircraft' | 'ship', id: string, data: any, sourceEntity: any) => {
+  const spawnModelFor = useCallback((kind: 'aircraft' | 'ship' | 'satellite', id: string, data: any, sourceEntity: any) => {
     const viewer = viewerRef.current;
     if (!viewer) return;
     despawnModel();
@@ -213,20 +224,26 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     let uriKey: string;
     if (kind === 'aircraft') {
       uriKey = (data.isMilitary || data.militaryClassification) ? 'aircraft-military' : 'aircraft-civilian';
-    } else {
+    } else if (kind === 'ship') {
       uriKey = data.type === 'passenger' ? 'ship-passenger' : 'ship-cargo';
+    } else {
+      uriKey = 'satellite';
     }
     const uri = MODEL_URIS[uriKey];
     if (!uri) return;
 
-    const heading = kind === 'aircraft' ? (data.heading || 0) : (data.course || 0);
-    const hpr = new Cesium.HeadingPitchRoll(
-      Cesium.Math.toRadians(heading),
-      0,
-      0,
-    );
+    // Live-updating orientation: always uses the latest heading/track from the source entity.
     const orientation = new Cesium.CallbackProperty(() => {
       const pos = sourceEntity.position?.getValue(viewer.clock.currentTime);
+      let live = 0;
+      try {
+        const raw = sourceEntity.properties?.entityData?.getValue();
+        const d = raw ? JSON.parse(raw) : data;
+        live = kind === 'aircraft' ? (d.heading ?? d.track ?? 0)
+             : kind === 'ship'     ? (d.course  ?? d.heading ?? 0)
+             : 0;
+      } catch { live = 0; }
+      const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(live), 0, 0);
       if (!pos) return Cesium.Transforms.headingPitchRollQuaternion(Cesium.Cartesian3.ZERO, hpr);
       return Cesium.Transforms.headingPitchRollQuaternion(pos, hpr);
     }, false);
@@ -236,9 +253,10 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       orientation,
       model: {
         uri,
-        minimumPixelSize: 64,
-        maximumScale: kind === 'aircraft' ? 20000 : 30000,
-        scale: kind === 'aircraft' ? 1.5 : 1.0,
+        minimumPixelSize: 32,
+        maximumScale: 20000,
+        scale: MODEL_SCALE[uriKey] ?? 1.0,
+        runAnimations: false,
         silhouetteColor: kind === 'aircraft' && uriKey === 'aircraft-military'
           ? Cesium.Color.fromCssColorString('#ff8c1a')
           : Cesium.Color.WHITE,
@@ -253,14 +271,19 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     if (sourceEntity.billboard) sourceEntity.billboard.show = false;
 
     // Camera: orbit slightly behind & above the model. Distance scales with speed.
-    const speed = kind === 'aircraft' ? (data.velocity || 200) : (data.speed || 10);
-    const range = kind === 'aircraft'
-      ? Math.max(1500, Math.min(15000, speed * 30))
-      : Math.max(400, Math.min(4000, speed * 60));
+    const initialHeading = kind === 'aircraft' ? (data.heading ?? data.track ?? 0)
+                         : kind === 'ship'     ? (data.course  ?? data.heading ?? 0)
+                         : 0;
+    const speed = kind === 'aircraft' ? (data.velocity || 200)
+                : kind === 'ship'     ? (data.speed || 10)
+                : 100;
+    const range = kind === 'aircraft' ? Math.max(1500, Math.min(15000, speed * 30))
+                : kind === 'ship'     ? Math.max(400,  Math.min(4000,  speed * 60))
+                : 5000000;
     viewer.flyTo(modelEntity, {
       duration: 1.2,
       offset: new Cesium.HeadingPitchRange(
-        Cesium.Math.toRadians(heading + 180),
+        Cesium.Math.toRadians(initialHeading + 180),
         Cesium.Math.toRadians(-20),
         range,
       ),
@@ -372,10 +395,12 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
         if (raw) data = JSON.parse(raw);
       } catch { return; }
       if (!entityType || !data) return;
-      if (entityType !== 'aircraft' && entityType !== 'ship') return;
+    if (entityType !== 'aircraft' && entityType !== 'ship' && entityType !== 'satellite') return;
 
-      const id = entityType === 'aircraft' ? data.icao24 : data.mmsi;
-      spawnModelFor(entityType as 'aircraft' | 'ship', id, data, picked.id);
+    const id = entityType === 'aircraft' ? data.icao24
+             : entityType === 'ship'     ? data.mmsi
+             : (data.noradId ?? data.name);
+    spawnModelFor(entityType as 'aircraft' | 'ship' | 'satellite', id, data, picked.id);
     }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
     viewerRef.current = viewer;
