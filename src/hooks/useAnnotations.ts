@@ -12,7 +12,7 @@ import {
   TriangleAnnotation,
   CustomAnnotation,
 } from '@/types/annotations';
-import { Aircraft } from '@/types/globe';
+import { Aircraft, Ship, SatelliteData } from '@/types/globe';
 
 // ---- Geo helpers ----
 const R_EARTH = 6371000; // meters
@@ -73,21 +73,61 @@ function saveAnnotations(list: Annotation[]) {
 
 function uid() { return Math.random().toString(36).slice(2, 11); }
 
-export function useAnnotations(aircraft: Aircraft[]) {
+export function useAnnotations(
+  aircraft: Aircraft[],
+  ships: Ship[] = [],
+  satellites: SatelliteData[] = [],
+) {
   const [annotations, setAnnotations] = useState<Annotation[]>(() => loadAnnotations());
   const [drawingTool, setDrawingTool] = useState<DrawingTool>(null);
   const [pendingPoint, setPendingPoint] = useState<{ lon: number; lat: number } | null>(null);
 
-  // Per-aircraft per-shape last-known-inside state (for entered/exited tracking)
-  const insideStateRef = useRef<Map<string, Set<string>>>(new Map()); // shapeId -> set of icao24
-  // Last-known position per aircraft for line-crossing detection
-  const lastPosRef = useRef<Map<string, { lon: number; lat: number; isMilitary: boolean }>>(new Map());
+  // Per-shape last-known-inside state (for entered/exited tracking).
+  // Keys are namespaced: "ac:<icao24>", "sh:<mmsi>", "sa:<noradId|name>".
+  const insideStateRef = useRef<Map<string, Set<string>>>(new Map());
+  // Last-known position per tracked entity (same namespaced keys) for line-crossing detection.
+  const lastPosRef = useRef<Map<string, { lon: number; lat: number; isMilitary: boolean; cls: 'civ' | 'mil' | 'cargo' | 'passenger' | 'satellite' }>>(new Map());
 
   useEffect(() => { saveAnnotations(annotations); }, [annotations]);
 
   // Recompute analytics whenever aircraft positions change
   useEffect(() => {
     if (annotations.length === 0) return;
+    // Unified list of trackable entities for analytics.
+    type Tracked = {
+      key: string;
+      lon: number;
+      lat: number;
+      isMilitary: boolean;
+      cls: 'civ' | 'mil' | 'cargo' | 'passenger' | 'satellite';
+    };
+    const tracked: Tracked[] = [];
+    for (const a of aircraft) {
+      if (a.latitude == null || a.longitude == null) continue;
+      tracked.push({
+        key: `ac:${a.icao24}`,
+        lon: a.longitude, lat: a.latitude,
+        isMilitary: !!a.isMilitary,
+        cls: a.isMilitary ? 'mil' : 'civ',
+      });
+    }
+    for (const s of ships) {
+      if (s.latitude == null || s.longitude == null) continue;
+      const cls = s.type === 'passenger' ? 'passenger' : 'cargo';
+      tracked.push({
+        key: `sh:${s.mmsi}`,
+        lon: s.longitude, lat: s.latitude,
+        isMilitary: false, cls,
+      });
+    }
+    for (const sat of satellites) {
+      if (sat.latitude == null || sat.longitude == null) continue;
+      tracked.push({
+        key: `sa:${sat.noradId ?? sat.name}`,
+        lon: sat.longitude, lat: sat.latitude,
+        isMilitary: false, cls: 'satellite',
+      });
+    }
     let mutated = false;
     const updated = annotations.map(ann => {
       if (ann.kind === 'point') return ann;
@@ -96,17 +136,21 @@ export function useAnnotations(aircraft: Aircraft[]) {
         const prevInside = insideStateRef.current.get(ann.id) ?? new Set<string>();
         const nowInside = new Set<string>();
         let civInside = 0, milInside = 0;
-        for (const a of aircraft) {
-          if (a.latitude == null || a.longitude == null) continue;
-          const p = { lon: a.longitude, lat: a.latitude };
+        let cargoInside = 0, paxInside = 0, satInside = 0;
+        for (const t of tracked) {
+          const p = { lon: t.lon, lat: t.lat };
           let inside = false;
           if (ann.kind === 'square') inside = isInsideSquare(p, ann);
           else if (ann.kind === 'circle') inside = isInsideCircle(p, ann);
           else if (ann.kind === 'triangle') inside = isInsidePolygon(p, ann.vertices);
           else if (ann.kind === 'custom') inside = isInsidePolygon(p, ann.vertices);
           if (inside) {
-            nowInside.add(a.icao24);
-            if (a.isMilitary) milInside++; else civInside++;
+            nowInside.add(t.key);
+            if (t.cls === 'mil') milInside++;
+            else if (t.cls === 'civ') civInside++;
+            else if (t.cls === 'cargo') cargoInside++;
+            else if (t.cls === 'passenger') paxInside++;
+            else if (t.cls === 'satellite') satInside++;
           }
         }
         let entered = ann.enteredTotal;
@@ -121,6 +165,7 @@ export function useAnnotations(aircraft: Aircraft[]) {
           exitedTotal: exited,
           civilianInside: civInside,
           militaryInside: milInside,
+          cargoInside, passengerInside: paxInside, satelliteInside: satInside,
         } as typeof ann;
         if (
           next.insideTotal !== ann.insideTotal ||
@@ -136,19 +181,25 @@ export function useAnnotations(aircraft: Aircraft[]) {
         let crossed = ann.crossedTotal;
         let civ = ann.crossedCivilian;
         let mil = ann.crossedMilitary;
+        let cargoX = (ann as any).crossedCargo ?? 0;
+        let paxX   = (ann as any).crossedPassenger ?? 0;
+        let satX   = (ann as any).crossedSatellite ?? 0;
         // Build segment list
         const segs: { a: { lon: number; lat: number }; b: { lon: number; lat: number } }[] = [];
         if (ann.kind === 'line') segs.push({ a: ann.start, b: ann.end });
         else for (let i = 0; i < ann.vertices.length - 1; i++) segs.push({ a: ann.vertices[i], b: ann.vertices[i + 1] });
-        for (const a of aircraft) {
-          if (a.latitude == null || a.longitude == null) continue;
-          const cur = { lon: a.longitude, lat: a.latitude, isMilitary: !!a.isMilitary };
-          const prev = lastPosRef.current.get(a.icao24);
+        for (const t of tracked) {
+          const cur = { lon: t.lon, lat: t.lat, isMilitary: t.isMilitary, cls: t.cls };
+          const prev = lastPosRef.current.get(t.key);
           if (prev) {
             for (const s of segs) {
               if (segmentsCross(prev, cur, s.a, s.b)) {
                 crossed++;
-                if (cur.isMilitary) mil++; else civ++;
+                if (cur.cls === 'mil') mil++;
+                else if (cur.cls === 'civ') civ++;
+                else if (cur.cls === 'cargo') cargoX++;
+                else if (cur.cls === 'passenger') paxX++;
+                else if (cur.cls === 'satellite') satX++;
                 break;
               }
             }
@@ -159,6 +210,9 @@ export function useAnnotations(aircraft: Aircraft[]) {
           crossedTotal: crossed,
           crossedCivilian: civ,
           crossedMilitary: mil,
+          crossedCargo: cargoX,
+          crossedPassenger: paxX,
+          crossedSatellite: satX,
         } as typeof ann;
         if (
           next.crossedTotal !== ann.crossedTotal ||
@@ -170,12 +224,11 @@ export function useAnnotations(aircraft: Aircraft[]) {
       return ann;
     });
     // Update last-known positions AFTER processing crossings
-    for (const a of aircraft) {
-      if (a.latitude == null || a.longitude == null) continue;
-      lastPosRef.current.set(a.icao24, { lon: a.longitude, lat: a.latitude, isMilitary: !!a.isMilitary });
+    for (const t of tracked) {
+      lastPosRef.current.set(t.key, { lon: t.lon, lat: t.lat, isMilitary: t.isMilitary, cls: t.cls });
     }
     if (mutated) setAnnotations(updated);
-  }, [aircraft]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aircraft, ships, satellites]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- CRUD ----
   const addPoint = useCallback((lon: number, lat: number, title: string, description: string, icon: PointIcon = 'dot') => {
