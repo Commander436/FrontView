@@ -60,7 +60,7 @@ export function ScopeOverlay({ mode }: ScopeOverlayProps) {
   const utc = time.toISOString().slice(11, 19);
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
+    <div className="absolute inset-0 pointer-events-none z-[9999] overflow-hidden">
 
       {/* Circular vignette */}
       <div
