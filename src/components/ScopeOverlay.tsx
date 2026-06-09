@@ -127,15 +127,6 @@ export function ScopeOverlay({ mode }: ScopeOverlayProps) {
             <div>COORD LOCK</div>
           </div>
 
-          <div className={`absolute bottom-6 left-6 font-mono text-[9px] ${dimTextColor}`}>
-            <div>FEED: ACTIVE</div>
-            <div>RES: 1080p</div>
-          </div>
-
-          <div className={`absolute bottom-6 right-6 font-mono text-[9px] ${dimTextColor} text-right`}>
-            <div>AES-256</div>
-            <div>ENCRYPTED</div>
-          </div>
         </>
       )}
     </div>
