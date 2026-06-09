@@ -17,7 +17,9 @@ import { twoline2satrec, propagate, gstime, eciToGeodetic } from 'satellite.js';
 declare const Cesium: any;
 
 // ---- SVG Icon Data URIs ----
-const mkIcon = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
+export function mkIcon(svg: string) {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
 //
 //  FLUENT UI SYSTEM ICON PACK (MODIFIED FOR YOUR APP)
 //  Modern • Semi‑Detailed • Professional • mkIcon‑Ready
