@@ -110,17 +110,6 @@ function computeOrbitPath(tle1: string, tle2: string, steps = 90): number[] {
   } catch { return []; }
 }
 
-function interpolateRoad(coords: number[][], t: number): [number, number] {
-  if (coords.length < 2) return coords[0] ? [coords[0][0], coords[0][1]] : [0, 0];
-  const idx = Math.max(0, Math.min(t, 0.9999)) * (coords.length - 1);
-  const i = Math.floor(idx);
-  const f = idx - i;
-  return [
-    coords[i][0] + f * (coords[i + 1][0] - coords[i][0]),
-    coords[i][1] + f * (coords[i + 1][1] - coords[i][1]),
-  ];
-}
-
 function altitudeColor(alt: number): string {
   if (alt < 3000) return '#38bdf8';
   if (alt < 8000) return '#22d3ee';
