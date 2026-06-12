@@ -163,6 +163,7 @@ export interface LayerVisibility {
   bases: boolean;
   buildings: boolean;
   weatherRadar: boolean;
+  earthquakes: boolean;
   conflicts: boolean;
   gpsInterference: boolean;
   internetBlackouts: boolean;
