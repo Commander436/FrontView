@@ -13,6 +13,8 @@ import { AIRSPACE_CLOSURES } from '@/data/airspaceClosures';
 import { OIL_PIPELINES } from '@/data/oilPipelines';
 import { SUBSEA_CABLES } from '@/data/subseaCables';
 import { twoline2satrec, propagate, gstime, eciToGeodetic } from 'satellite.js';
+import { enableBuildings, disableBuildings } from '@/layers/osmBuildingsOverpass';
+import { enableEarthquakes, disableEarthquakes } from '@/layers/earthquakes';
 
 declare const Cesium: any;
 
@@ -330,6 +332,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
     viewer.camera.percentageChanged = 0.05;
 
     const layerNames = ['aircraft', 'aircraftTrails', 'ships', 'satellites', 'orbits', 'bases', 'conflicts', 'thermalAnomalies', 'cities', 'buildings', 'traffic', 'infrastructure', 'gpsInterference', 'internetBlackouts', 'airspaceClosures', 'oilPipelines', 'subseaCables'];
+    layerNames.push('earthquakes');
     layerNames.push('annotations');
     layerNames.forEach(name => {
       const ds = new Cesium.CustomDataSource(name);
