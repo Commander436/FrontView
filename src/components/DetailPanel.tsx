@@ -312,6 +312,23 @@ function renderDetails(entity: SelectedEntity) {
         </>
       );
     }
+    case 'earthquake': {
+      const q = d as { mag: number; place: string; depth: number; time: number };
+      const sev = q.mag > 5 ? 'border-destructive/50 text-destructive bg-destructive/10'
+              : q.mag >= 2.5 ? 'border-orange-500/50 text-orange-400 bg-orange-500/10'
+              : 'border-yellow-500/50 text-yellow-400 bg-yellow-500/10';
+      return (
+        <>
+          <Badge text={`M ${q.mag}`} color={sev} />
+          <SectionHeader label="Seismic Event" />
+          <InfoRow label="Magnitude" value={q.mag} highlight />
+          <InfoRow label="Location" value={q.place} />
+          <InfoRow label="Depth" value={q.depth != null ? `${q.depth} km` : 'Unknown'} />
+          <InfoRow label="Time (UTC)" value={q.time ? new Date(q.time).toUTCString() : 'Unknown'} />
+          <InfoRow label="Source" value="USGS Earthquake Hazards" />
+        </>
+      );
+    }
   }
 }
 
