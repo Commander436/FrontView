@@ -17,137 +17,225 @@ import { twoline2satrec, propagate, gstime, eciToGeodetic } from 'satellite.js';
 declare const Cesium: any;
 
 // ---- SVG Icon Data URIs ----
-export function mkIcon(svg: string) {
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
+const mkIcon = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
 //
-//  FLUENT UI SYSTEM ICON PACK (MODIFIED FOR YOUR APP)
-//  Modern • Semi‑Detailed • Professional • mkIcon‑Ready
+//  STEALTH‑ANGULAR GLASS‑EDGE ISR ICON PACK
+//  Dual‑Tone • Medium Bevel • Negative‑Space • mkIcon‑Ready
 //
 
-// CIVILIAN AIRCRAFT (WHITE)
+// =========================
+//   CIVILIAN AIRCRAFT (WHITE)
+//   Stealth‑Angular F‑35‑like geometry
+// =========================
 const ICON_PLANE = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path fill="#ffffff" d="M2 16l8-2 2 6h2l2-6 8 2v-2l-8-5V3h-4v6l-8 5z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <!-- Outer stealth silhouette -->
+  <path fill="#ffffff" fill-opacity="0.92"
+        d="M24 3 L30 14 L44 20 L44 24 L30 22 L28 45 L20 45 L18 22 L4 24 L4 20 L18 14 Z"/>
+  <!-- Inner bevel -->
+  <path fill="#ffffff" fill-opacity="0.45"
+        d="M24 6 L28 14 L40 19 L40 21 L28 19 L26 42 L22 42 L20 19 L8 21 L8 19 L20 14 Z"/>
 </svg>
 `);
 
-// MILITARY AIRCRAFT (ORANGE)
+
+// =========================
+//   MILITARY AIRCRAFT (ORANGE)
+//   Stealth‑Angular F‑22‑like geometry
+// =========================
 const ICON_MIL_PLANE = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path fill="#ff8c1a" d="M12 2l4 5 6 3v2l-6-1-2 11h-4L8 11l-6 1V10l6-3z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <!-- Outer stealth silhouette -->
+  <path fill="#ff8c1a" fill-opacity="0.92"
+        d="M24 2 L32 14 L46 20 L46 24 L32 22 L30 45 L18 45 L16 22 L2 24 L2 20 L16 14 Z"/>
+  <!-- Inner bevel -->
+  <path fill="#ff8c1a" fill-opacity="0.45"
+        d="M24 5 L30 14 L42 19 L42 21 L30 19 L28 42 L20 42 L18 19 L6 21 L6 19 L18 14 Z"/>
 </svg>
 `);
 
-// UNKNOWN AIRCRAFT (GRAY)
+
+// =========================
+//   UNKNOWN AIRCRAFT (GRAY)
+//   Angular diamond with bevel
+// =========================
 const ICON_UNKNOWN_PLANE = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path fill="#c0c0c0" d="M12 3l9 9-9 9-9-9z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <path fill="#c0c0c0" fill-opacity="0.92"
+        d="M24 6 L38 24 L24 42 L10 24 Z"/>
+  <path fill="#ffffff" fill-opacity="0.25"
+        d="M24 10 L34 24 L24 38 L14 24 Z"/>
 </svg>
 `);
 
-// SATELLITE (AMBER)
+
+// =========================
+//   SATELLITE (AMBER)
+//   Angular ISS‑panel geometry
+// =========================
 const ICON_SAT = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect x="2" y="9" width="5" height="6" fill="#f59e0b"/>
-  <rect x="17" y="9" width="5" height="6" fill="#f59e0b"/>
-  <rect x="9" y="8" width="6" height="8" fill="#fbbf24"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <!-- Panels -->
+  <rect x="1" y="7" width="5" height="6" fill="#f59e0b" fill-opacity="0.9"/>
+  <rect x="14" y="7" width="5" height="6" fill="#f59e0b" fill-opacity="0.9"/>
+  <!-- Body -->
+  <rect x="7" y="6" width="6" height="8" fill="#fbbf24" fill-opacity="0.9"/>
+  <!-- Inner bevel -->
+  <rect x="8" y="7" width="4" height="6" fill="#ffffff" fill-opacity="0.35"/>
 </svg>
 `);
 
-// CARGO SHIP (CYAN)
+
+// =========================
+//   CARGO SHIP (CYAN)
+//   Angular hull + deck geometry
+// =========================
 const ICON_CARGO_SHIP = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path fill="#38bdf8" d="M3 14l3-6h12l3 6-3 7H6z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <!-- Hull -->
+  <path fill="#38bdf8" fill-opacity="0.92"
+        d="M4 28 L24 10 L44 28 L38 42 H10 Z"/>
+  <!-- Deck bevel -->
+  <path fill="#ffffff" fill-opacity="0.35"
+        d="M8 28 L24 14 L40 28 L36 38 H12 Z"/>
 </svg>
 `);
 
-// PASSENGER SHIP (WHITE)
+
+// =========================
+//   PASSENGER SHIP (WHITE)
+//   Sleek angular hull + superstructure
+// =========================
 const ICON_PASSENGER_SHIP = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path fill="#ffffff" d="M2 15l4-7h12l4 7-3 6H5z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <!-- Hull -->
+  <path fill="#ffffff" fill-opacity="0.92"
+        d="M6 30 L24 12 L42 30 L36 42 H12 Z"/>
+  <!-- Superstructure bevel -->
+  <path fill="#ffffff" fill-opacity="0.45"
+        d="M10 30 L24 18 L38 30 L34 38 H14 Z"/>
 </svg>
 `);
 
-// BASE (GREEN)
+
+// =========================
+//   BASE (GREEN)
+//   Angular shield + bevel
+// =========================
 const ICON_BASE = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path fill="#39ff14" d="M12 2l10 6v6c0 6-5 10-10 10S2 20 2 14V8z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+  <path fill="#39ff14" fill-opacity="0.92"
+        d="M11 2 L20 7 V12 C20 17 15.5 21 11 21 C6.5 21 2 17 2 12 V7 Z"/>
+  <path fill="#ffffff" fill-opacity="0.25"
+        d="M11 4 L18 8 V12 C18 16 14.5 19 11 19 C7.5 19 4 16 4 12 V8 Z"/>
 </svg>
 `);
 
-// CITY (WHITE)
+
+// =========================
+//   CITY (WHITE)
+//   Angular skyline + bevel
+// =========================
 const ICON_CITY = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect x="3" y="10" width="4" height="11" fill="#ffffff"/>
-  <rect x="8" y="6" width="5" height="15" fill="#ffffff"/>
-  <rect x="14" y="8" width="4" height="13" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+  <rect x="2" y="9" width="4" height="11" fill="#ffffff" fill-opacity="0.92"/>
+  <rect x="7" y="5" width="5" height="15" fill="#ffffff" fill-opacity="0.92"/>
+  <rect x="13" y="7" width="4" height="13" fill="#ffffff" fill-opacity="0.92"/>
+  <!-- Bevel -->
+  <rect x="3" y="10" width="2" height="9" fill="#ffffff" fill-opacity="0.35"/>
+  <rect x="8" y="6" width="3" height="13" fill="#ffffff" fill-opacity="0.35"/>
+  <rect x="14" y="8" width="2" height="11" fill="#ffffff" fill-opacity="0.35"/>
 </svg>
 `);
 
-// AIRPORT (CYAN)
+
+// =========================
+//   AIRPORT (CYAN)
+//   Angular runway + bevel
+// =========================
 const ICON_AIRPORT = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path fill="#7dd3fc" d="M12 2l4 6h4l-5 5 2 7h-5l-2-5-5 2 2-4-2-6h4z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+  <path fill="#7dd3fc" fill-opacity="0.92"
+        d="M11 2 L15 8 H19 L14 12 L16 20 H11 L9 14 L3 16 L5 12 L3 6 H7 Z"/>
+  <path fill="#ffffff" fill-opacity="0.35"
+        d="M11 4 L14 8 H17 L13 11 L14 18 H11 L10 13 L5 14 L6 11 L5 7 H8 Z"/>
 </svg>
 `);
 
-// PORT (CYAN)
+
+// =========================
+//   PORT (CYAN)
+//   Angular anchor + bevel
+// =========================
 const ICON_PORT = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <circle cx="12" cy="5" r="3" fill="#38bdf8"/>
-  <path fill="#38bdf8" d="M11 7h2v12h-2z"/>
-  <path fill="#38bdf8" d="M6 19c0-4 6-5 6-5s6 1 6 5z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+  <circle cx="11" cy="5" r="3" fill="#38bdf8" fill-opacity="0.92"/>
+  <path fill="#38bdf8" fill-opacity="0.92"
+        d="M10 7 H12 V18 H10 Z"/>
+  <path fill="#38bdf8" fill-opacity="0.92"
+        d="M6 18 C6 14 11 13 11 13 C11 13 16 14 16 18 Z"/>
+  <!-- Bevel -->
+  <circle cx="11" cy="5" r="2" fill="#ffffff" fill-opacity="0.35"/>
 </svg>
 `);
 
-// ENERGY (WIND)
+
+// =========================
+//   ENERGY / TELECOM / LZ
+//   (Kept angular + beveled)
+// =========================
+
+// Wind
 const ICON_ENERGY_WIND = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <path fill="#facc15" d="M11 2h2v20h-2z"/>
-  <path fill="#facc15" d="M12 2l-6 7h3l3-4z"/>
-  <path fill="#facc15" d="M12 2l6 7h-3l-3-4z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <path fill="#facc15" fill-opacity="0.92" d="M9 2 H11 V18 H9 Z"/>
+  <path fill="#facc15" fill-opacity="0.92" d="M10 2 L4 9 H7 L10 5 Z"/>
+  <path fill="#facc15" fill-opacity="0.92" d="M10 2 L16 9 H13 L10 5 Z"/>
+  <path fill="#ffffff" fill-opacity="0.35" d="M10 4 L6 9 H8 L10 6 Z"/>
 </svg>
 `);
 
-// ENERGY (SOLAR)
+// Solar
 const ICON_ENERGY_SOLAR = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect x="3" y="8" width="18" height="12" fill="#facc15"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <rect x="3" y="7" width="14" height="10" fill="#facc15" fill-opacity="0.92"/>
+  <rect x="4" y="8" width="12" height="8" fill="#ffffff" fill-opacity="0.35"/>
 </svg>
 `);
 
-// ENERGY (NUCLEAR)
+// Nuclear
 const ICON_ENERGY_NUCLEAR = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <circle cx="12" cy="12" r="8" fill="none" stroke="#facc15" stroke-width="2"/>
-  <circle cx="12" cy="12" r="3" fill="#facc15"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <circle cx="10" cy="10" r="7" fill="none" stroke="#facc15" stroke-width="2" stroke-opacity="0.92"/>
+  <circle cx="10" cy="10" r="3" fill="#facc15" fill-opacity="0.92"/>
+  <circle cx="10" cy="10" r="2" fill="#ffffff" fill-opacity="0.35"/>
 </svg>
 `);
 
-// ENERGY (HYDRO)
+// Hydro
 const ICON_ENERGY_HYDRO = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect x="3" y="7" width="18" height="10" fill="#38bdf8"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <rect x="3" y="6" width="14" height="8" fill="#38bdf8" fill-opacity="0.92"/>
+  <rect x="4" y="7" width="12" height="6" fill="#ffffff" fill-opacity="0.35"/>
 </svg>
 `);
 
-// TELECOM
+// Telecom
 const ICON_TELECOM = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect x="11" y="5" width="2" height="14" fill="#a78bfa"/>
-  <circle cx="12" cy="5" r="2" fill="#a78bfa"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+  <rect x="9" y="5" width="2" height="12" fill="#a78bfa" fill-opacity="0.92"/>
+  <circle cx="10" cy="5" r="2" fill="#a78bfa" fill-opacity="0.92"/>
+  <circle cx="10" cy="5" r="1" fill="#ffffff" fill-opacity="0.35"/>
 </svg>
 `);
 
-// LANDING ZONE
+// Landing Zone
 const ICON_LANDING = mkIcon(`
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <circle cx="12" cy="12" r="8" fill="#22d3ee40"/>
-  <circle cx="12" cy="12" r="3" fill="#22d3ee"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <circle cx="8" cy="8" r="6" fill="#22d3ee40"/>
+  <circle cx="8" cy="8" r="2" fill="#22d3ee"/>
 </svg>
 `);
-
 
 // ---- Annotation point icons (military silhouette set) ----
 const ANN_ICONS: Record<string, (color: string) => string> = {
