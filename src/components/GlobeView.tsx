@@ -1355,71 +1355,31 @@ float rand(vec2 co){
     };
   }, [layers.weatherRadar]);
 
-    useEffect(() => {
+  // ========== 3D BUILDINGS (Overpass tile-based, cached) ==========
+  useEffect(() => {
     const viewer = viewerRef.current;
-    const ds = dsRefs.current['buildings'];
-    if (!viewer || !ds) return;
-    ds.show = layers.buildings;
-    if (!layers.buildings) { ds.entities.removeAll(); buildingFetchedBbox.current = ''; return; }
+    if (!viewer) return;
+    if (layers.buildings) {
+      enableBuildings(viewer);
+    } else {
+      disableBuildings(viewer);
+    }
+    return () => { /* disable handled on toggle off / unmount below */ };
+  }, [layers.buildings]);
 
-    const bColor = displayMode === 'nvg' ? '#39ff1480' : displayMode === 'crt' ? '#00ff4060' : displayMode === 'flir' ? '#ff660060' : '#1a1a2e80';
-    const oColor = displayMode === 'nvg' ? '#39ff14' : displayMode === 'crt' ? '#00ff40' : displayMode === 'flir' ? '#ff6600' : '#00ffa340';
-    let timeout: any;
-
-    const checkZoom = () => {
-      clearTimeout(timeout);
-      timeout = setTimeout(async () => {
-        const height = viewer.camera.positionCartographic?.height;
-        if (!height || height > 50000) { ds.entities.removeAll(); buildingFetchedBbox.current = ''; return; }
-        const rect = viewer.camera.computeViewRectangle();
-        if (!rect) return;
-        const s = Cesium.Math.toDegrees(rect.south), w = Cesium.Math.toDegrees(rect.west);
-        const n = Cesium.Math.toDegrees(rect.north), e = Cesium.Math.toDegrees(rect.east);
-        if ((n - s) > 0.05 || (e - w) > 0.05) return;
-        const bk = `${s.toFixed(4)},${w.toFixed(4)},${n.toFixed(4)},${e.toFixed(4)}`;
-        if (bk === buildingFetchedBbox.current) return;
-        buildingFetchedBbox.current = bk;
-        try {
-          const q = `[out:json][timeout:10];way["building"](${s},${w},${n},${e});out geom 300;`;
-          const resp = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: `data=${encodeURIComponent(q)}` });
-          const data = await resp.json();
-          ds.entities.removeAll();
-          (data.elements || []).forEach((el: any) => {
-            if (!el.geometry || el.geometry.length < 3) return;
-            const coords = el.geometry.flatMap((nd: any) => [nd.lon, nd.lat]);
-            const h = el.tags?.height ? parseFloat(el.tags.height) : el.tags?.['building:levels'] ? parseFloat(el.tags['building:levels']) * 3.5 : 15;
-            const t = el.tags || {};
-            const buildingData = {
-              name: t.name || 'Unknown',
-              buildingType: t.building && t.building !== 'yes' ? t.building : 'Unknown',
-              height: t.height
-                ? `${parseFloat(t.height)} m`
-                : t['building:levels']
-                  ? `${parseFloat(t['building:levels']) * 3} m (est.)`
-                  : 'Unknown',
-              address: [t['addr:housenumber'], t['addr:street'], t['addr:city'], t['addr:postcode']]
-                .filter(Boolean).join(', ') || 'Unknown',
-              operator: t.operator || t.owner || 'Unknown',
-              constructionYear: t.start_date || 'Unknown',
-            };
-            ds.entities.add({
-              polygon: {
-                hierarchy: Cesium.Cartesian3.fromDegreesArray(coords),
-                extrudedHeight: h + 2, height: 2,
-                material: Cesium.Color.fromCssColorString(bColor),
-                outline: true, outlineColor: Cesium.Color.fromCssColorString(oColor), outlineWidth: 1,
-              },
-              properties: { entityType: 'building', entityData: JSON.stringify(buildingData) },
-            });
-          });
-        } catch (err) { console.warn('Buildings fetch failed:', err); }
-      }, 1500);
+  // ========== EARTHQUAKES (USGS live feed) ==========
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    if (layers.earthquakes) {
+      enableEarthquakes(viewer);
+    } else {
+      disableEarthquakes(viewer);
+    }
+    return () => {
+      if (viewer && !viewer.isDestroyed?.()) disableEarthquakes(viewer);
     };
-
-    viewer.camera.changed.addEventListener(checkZoom);
-    checkZoom();
-    return () => { clearTimeout(timeout); viewer.camera.changed.removeEventListener(checkZoom); ds.entities.removeAll(); };
-  }, [layers.buildings, displayMode]);
+  }, [layers.earthquakes]);
 
 // ========== STREET TRAFFIC (REVAMPED) ==========
 useEffect(() => {
