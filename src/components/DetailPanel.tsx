@@ -1,5 +1,5 @@
 import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem, GPSInterferenceZone, InternetBlackout, AirspaceClosure } from '@/types/globe';
-import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, SignalZero, WifiOff, ShieldAlert, Shield, AlertTriangle } from 'lucide-react';
+import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, SignalZero, WifiOff, ShieldAlert, Shield, AlertTriangle, Activity } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AnnotationDetail } from './AnnotationDetail';
 import { Annotation, AnnotationColor, LineStyle, PointIcon } from '@/types/annotations';
@@ -64,6 +64,7 @@ function getIcon(type: string) {
     case 'internet_blackout': return <WifiOff className={cls} />;
     case 'airspace_closure': return <ShieldAlert className={cls} />;
     case 'building': return <Building2 className={cls} />;
+    case 'earthquake': return <Activity className={cls} />;
     default: return null;
   }
 }
@@ -82,6 +83,7 @@ function getTitle(entity: SelectedEntity): string {
     case 'internet_blackout': return `${(d as InternetBlackout).country} Blackout`;
     case 'airspace_closure': return (d as AirspaceClosure).name;
     case 'building': return (d as any).name || 'Building';
+    case 'earthquake': return `M ${(d as any).mag ?? '?'} — ${(d as any).place ?? 'Earthquake'}`;
     default: return 'Unknown';
   }
 }
