@@ -1,4 +1,5 @@
-// Live earthquakes layer powered by USGS GeoJSON feed.
+// Live earthquakes layer — USGS GeoJSON feed, refreshes every 60s.
+// Uses BillboardGraphics with glass-edge SVG (yellow/orange/red by magnitude).
 
 declare const Cesium: any;
 
@@ -16,14 +17,32 @@ interface Ctx {
 
 let ctx: Ctx | null = null;
 
-function colorFor(mag: number) {
-  if (mag < 2.5) return Cesium.Color.fromCssColorString('#facc15'); // yellow
-  if (mag <= 5.0) return Cesium.Color.fromCssColorString('#fb923c'); // orange
-  return Cesium.Color.fromCssColorString('#ef4444'); // red
+function colorFor(mag: number): { core: string; glow: string } {
+  if (mag < 2.5) return { core: '#facc15', glow: '#fde047' };
+  if (mag <= 5.0) return { core: '#fb923c', glow: '#fdba74' };
+  return { core: '#ef4444', glow: '#fca5a5' };
 }
 
-function sizeFor(mag: number) {
-  return Math.max(6, Math.min(28, mag * 4));
+function glassSvg(mag: number): string {
+  const { core, glow } = colorFor(mag);
+  const r = Math.max(10, Math.min(40, mag * 6));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+    <defs>
+      <radialGradient id="g" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="${glow}" stop-opacity="1"/>
+        <stop offset="55%" stop-color="${core}" stop-opacity="0.9"/>
+        <stop offset="100%" stop-color="${core}" stop-opacity="0"/>
+      </radialGradient>
+      <filter id="b" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="3"/>
+      </filter>
+    </defs>
+    <circle cx="48" cy="48" r="${r + 6}" fill="${core}" opacity="0.25" filter="url(#b)"/>
+    <circle cx="48" cy="48" r="${r}" fill="url(#g)"/>
+    <circle cx="48" cy="48" r="${r}" fill="none" stroke="${core}" stroke-width="1.5" opacity="0.9"/>
+    <circle cx="48" cy="48" r="${Math.max(2, r * 0.35)}" fill="#ffffff" opacity="0.85"/>
+  </svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 async function refresh() {
@@ -45,30 +64,37 @@ async function refresh() {
       if (typeof lon !== 'number' || typeof lat !== 'number') continue;
       const mag = f.properties?.mag ?? 0;
       const place = f.properties?.place || 'Unknown location';
-      const color = colorFor(mag);
-      const size = sizeFor(mag);
+      const time = f.properties?.time;
+      const image = glassSvg(mag);
 
-      const pixelSize = mag > 5
+      const scale = mag > 5
         ? new Cesium.CallbackProperty(() => {
             const t = (Date.now() % 1500) / 1500;
-            return size * (1 + 0.4 * Math.sin(t * Math.PI * 2));
+            return 1 + 0.35 * Math.sin(t * Math.PI * 2);
           }, false)
-        : size;
+        : 1.0;
 
       ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(lon, lat),
-        point: {
-          pixelSize,
-          color,
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
-          outlineWidth: 1,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        billboard: {
+          image,
+          scale,
+          disableDepthTestDistance: 0,
+          eyeOffset: new Cesium.Cartesian3(0, 0, -10),
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0.0, 20_000_000.0),
         },
         description: `M ${mag} — ${place} — Depth ${depth ?? '?'} km`,
-        properties: {
+        // PropertyBag for direct intel-panel access
+        properties: new Cesium.PropertyBag({
           entityType: 'earthquake',
-          entityData: JSON.stringify({ mag, place, depth, time: f.properties?.time }),
-        },
+          entityData: JSON.stringify({ mag, place, depth, time }),
+          mag,
+          place,
+          depth,
+          time,
+        }),
       });
     }
   } catch (e) {
