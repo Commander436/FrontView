@@ -16,6 +16,7 @@ export function useGlobeState() {
     bases: true,
     buildings: false,
     weatherRadar: false,
+    earthquakes: false,
     conflicts: true,
     gpsInterference: false,
     internetBlackouts: false,
