@@ -13,8 +13,9 @@ import { AIRSPACE_CLOSURES } from '@/data/airspaceClosures';
 import { OIL_PIPELINES } from '@/data/oilPipelines';
 import { SUBSEA_CABLES } from '@/data/subseaCables';
 import { twoline2satrec, propagate, gstime, eciToGeodetic } from 'satellite.js';
-import { enableBuildings, disableBuildings } from '@/layers/osmBuildingsOverpass';
+import { enableBuildings, disableBuildings } from '@/layers/buildings';
 import { enableEarthquakes, disableEarthquakes } from '@/layers/earthquakes';
+import { enableTraffic, disableTraffic } from '@/layers/traffic';
 
 declare const Cesium: any;
 
