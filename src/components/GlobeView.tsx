@@ -157,11 +157,6 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
   const shipTrailEntity = useRef<any>(null);
   const selectedSatOrbit = useRef<string | null>(null);
 
-  const vehiclesRef = useRef<any[]>([]);
-  const lastTrafficTime = useRef(Date.now());
-  const trafficFetchedBbox = useRef('');
-  const buildingFetchedBbox = useRef('');
-
   // 3D model spawn state (one model at a time)
   const modelEntityRef = useRef<any>(null);
   const modelOwnerRef = useRef<{ kind: 'aircraft' | 'ship' | 'satellite'; id: string } | null>(null);
