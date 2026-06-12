@@ -1,5 +1,5 @@
 import { SelectedEntity, Aircraft, SatelliteData, City, MilitaryBase, ConflictZone, Ship, InfrastructureItem, GPSInterferenceZone, InternetBlackout, AirspaceClosure } from '@/types/globe';
-import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, SignalZero, WifiOff, ShieldAlert, Shield, AlertTriangle } from 'lucide-react';
+import { Plane, Satellite, Building2, Swords, Anchor, MapPin, Zap, SignalZero, WifiOff, ShieldAlert, Shield, AlertTriangle, Activity } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AnnotationDetail } from './AnnotationDetail';
 import { Annotation, AnnotationColor, LineStyle, PointIcon } from '@/types/annotations';
@@ -64,6 +64,7 @@ function getIcon(type: string) {
     case 'internet_blackout': return <WifiOff className={cls} />;
     case 'airspace_closure': return <ShieldAlert className={cls} />;
     case 'building': return <Building2 className={cls} />;
+    case 'earthquake': return <Activity className={cls} />;
     default: return null;
   }
 }
@@ -82,6 +83,7 @@ function getTitle(entity: SelectedEntity): string {
     case 'internet_blackout': return `${(d as InternetBlackout).country} Blackout`;
     case 'airspace_closure': return (d as AirspaceClosure).name;
     case 'building': return (d as any).name || 'Building';
+    case 'earthquake': return `M ${(d as any).mag ?? '?'} — ${(d as any).place ?? 'Earthquake'}`;
     default: return 'Unknown';
   }
 }
@@ -307,6 +309,23 @@ function renderDetails(entity: SelectedEntity) {
           <InfoRow label="Address" value={b.address} />
           <InfoRow label="Operator / Owner" value={b.operator} />
           <InfoRow label="Construction Year" value={b.constructionYear} />
+        </>
+      );
+    }
+    case 'earthquake': {
+      const q = d as { mag: number; place: string; depth: number; time: number };
+      const sev = q.mag > 5 ? 'border-destructive/50 text-destructive bg-destructive/10'
+              : q.mag >= 2.5 ? 'border-orange-500/50 text-orange-400 bg-orange-500/10'
+              : 'border-yellow-500/50 text-yellow-400 bg-yellow-500/10';
+      return (
+        <>
+          <Badge text={`M ${q.mag}`} color={sev} />
+          <SectionHeader label="Seismic Event" />
+          <InfoRow label="Magnitude" value={q.mag} highlight />
+          <InfoRow label="Location" value={q.place} />
+          <InfoRow label="Depth" value={q.depth != null ? `${q.depth} km` : 'Unknown'} />
+          <InfoRow label="Time (UTC)" value={q.time ? new Date(q.time).toUTCString() : 'Unknown'} />
+          <InfoRow label="Source" value="USGS Earthquake Hazards" />
         </>
       );
     }

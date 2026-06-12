@@ -145,7 +145,7 @@ export interface AirspaceClosure {
 }
 
 export interface SelectedEntity {
-  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout' | 'airspace_closure' | 'annotation' | 'building';
+  type: 'aircraft' | 'satellite' | 'city' | 'base' | 'conflict' | 'ship' | 'infrastructure' | 'gps_interference' | 'internet_blackout' | 'airspace_closure' | 'annotation' | 'building' | 'earthquake';
   data: any;
 }
 

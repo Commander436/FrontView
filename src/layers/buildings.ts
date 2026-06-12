@@ -1,25 +1,27 @@
-// Tile-based, cached Overpass building loader for Cesium.
-// No Cesium ion. No OSM Buildings. Pure Overpass API behind a tile grid.
+// Tile-based, cached, debounced Overpass building loader using a Web Worker
+// for OSM → geometry parsing. No Cesium ion. No OSM Buildings.
 
 declare const Cesium: any;
 
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
-  'https://lz4.overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
 ];
 
 const TILE_ZOOM = 15;
-const MAX_ALT = 50_000; // meters
-const DEBOUNCE_MS = 400;
-const MAX_TILES_PER_FRAME = 12;
+const MAX_ALT = 50_000;
+const DEBOUNCE_MS = 300;
+const MAX_TILES_PER_PASS = 12;
 
-type TileStatus = 'idle' | 'loading' | 'ready' | 'error';
+type TileStatus = 'loading' | 'ready' | 'error';
 interface TileState {
   status: TileStatus;
-  entityIds: string[]; // entity ids attached for this tile
+  entityIds: string[];
+  buildings?: Array<{ positions: number[]; height: number; tags: any }>;
 }
 
+// Forever cache. Never re-fetch.
 const tileCache = new Map<string, TileState>();
 
 function lon2tile(lon: number, z: number) {
@@ -28,7 +30,7 @@ function lon2tile(lon: number, z: number) {
 function lat2tile(lat: number, z: number) {
   const r = (lat * Math.PI) / 180;
   return Math.floor(
-    (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z),
+    ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * Math.pow(2, z),
   );
 }
 function tile2lon(x: number, z: number) {
@@ -59,47 +61,68 @@ async function fetchOverpass(body: string): Promise<any | null> {
   return null;
 }
 
-function parseOverpassToBuildings(data: any): Array<{
-  positions: number[];
-  height: number;
-  tags: any;
-}> {
-  const nodes = new Map<number, [number, number]>();
-  const out: Array<{ positions: number[]; height: number; tags: any }> = [];
-  for (const el of data.elements || []) {
-    if (el.type === 'node') nodes.set(el.id, [el.lon, el.lat]);
-  }
-  for (const el of data.elements || []) {
-    if (el.type !== 'way' || !el.nodes || !el.tags || !el.tags.building) continue;
-    const positions: number[] = [];
-    for (const nid of el.nodes) {
-      const n = nodes.get(nid);
-      if (n) positions.push(n[0], n[1]);
-    }
-    if (positions.length < 6) continue;
-    const t = el.tags;
-    let h = 10;
-    if (t.height) {
-      const v = parseFloat(t.height);
-      if (!isNaN(v)) h = v;
-    } else if (t['building:levels']) {
-      const v = parseFloat(t['building:levels']);
-      if (!isNaN(v)) h = v * 3;
-    }
-    out.push({ positions, height: h, tags: t });
-  }
-  return out;
-}
-
 interface Ctx {
   viewer: any;
-  ds: any; // CustomDataSource for picking compatibility
+  ds: any;
+  worker: Worker;
   removeListener?: () => void;
   debounceTimer?: any;
   active: boolean;
 }
 
 let ctx: Ctx | null = null;
+
+const FILL = '#ffffff';
+const FILL_ALPHA = 0.85;
+
+function attachBuildingsToScene(
+  tileKey: string,
+  buildings: Array<{ positions: number[]; height: number; tags: any }>,
+) {
+  if (!ctx) return;
+  const ds = ctx.ds;
+  const ids: string[] = [];
+  const fill = Cesium.Color.fromCssColorString(FILL).withAlpha(FILL_ALPHA);
+  const outline = Cesium.Color.fromCssColorString('#ffffff55');
+  for (let i = 0; i < buildings.length; i++) {
+    const b = buildings[i];
+    const t = b.tags || {};
+    const buildingData = {
+      name: t.name || 'Unknown',
+      buildingType: t.building && t.building !== 'yes' ? t.building : 'Unknown',
+      height: t.height
+        ? `${parseFloat(t.height)} m`
+        : t['building:levels']
+          ? `${parseFloat(t['building:levels']) * 3} m (est.)`
+          : 'Unknown',
+      address: [t['addr:housenumber'], t['addr:street'], t['addr:city'], t['addr:postcode']]
+        .filter(Boolean).join(', ') || 'Unknown',
+      operator: t.operator || t.owner || 'Unknown',
+      constructionYear: t.start_date || 'Unknown',
+    };
+    const id = `bld-${tileKey}-${i}`;
+    ds.entities.add({
+      id,
+      polygon: {
+        hierarchy: Cesium.Cartesian3.fromDegreesArray(b.positions),
+        extrudedHeight: b.height + 1,
+        height: 0,
+        material: fill,
+        outline: true,
+        outlineColor: outline,
+        outlineWidth: 1,
+      },
+      properties: { entityType: 'building', entityData: JSON.stringify(buildingData) },
+    });
+    ids.push(id);
+  }
+  const state = tileCache.get(tileKey);
+  if (state) {
+    state.status = 'ready';
+    state.entityIds = ids;
+    state.buildings = buildings;
+  }
+}
 
 function computeVisibleTiles(viewer: any): string[] {
   const rect = viewer.camera.computeViewRectangle();
@@ -122,51 +145,6 @@ function computeVisibleTiles(viewer: any): string[] {
   return keys;
 }
 
-function addTileToScene(tileKey: string, buildings: Array<{ positions: number[]; height: number; tags: any }>) {
-  if (!ctx) return;
-  const ds = ctx.ds;
-  const ids: string[] = [];
-  const fill = Cesium.Color.fromCssColorString('#ffffffd9');
-  const outline = Cesium.Color.fromCssColorString('#ffffff55');
-  for (let i = 0; i < buildings.length; i++) {
-    const b = buildings[i];
-    const t = b.tags || {};
-    const buildingData = {
-      name: t.name || 'Unknown',
-      buildingType: t.building && t.building !== 'yes' ? t.building : 'Unknown',
-      height: t.height
-        ? `${parseFloat(t.height)} m`
-        : t['building:levels']
-          ? `${parseFloat(t['building:levels']) * 3} m (est.)`
-          : 'Unknown',
-      address: [t['addr:housenumber'], t['addr:street'], t['addr:city'], t['addr:postcode']]
-        .filter(Boolean).join(', ') || 'Unknown',
-      operator: t.operator || t.owner || 'Unknown',
-      constructionYear: t.start_date || 'Unknown',
-    };
-    const id = `ovp-${tileKey}-${i}`;
-    ds.entities.add({
-      id,
-      polygon: {
-        hierarchy: Cesium.Cartesian3.fromDegreesArray(b.positions),
-        extrudedHeight: b.height + 1,
-        height: 0,
-        material: fill,
-        outline: true,
-        outlineColor: outline,
-        outlineWidth: 1,
-      },
-      properties: { entityType: 'building', entityData: JSON.stringify(buildingData) },
-    });
-    ids.push(id);
-  }
-  const state = tileCache.get(tileKey);
-  if (state) {
-    state.status = 'ready';
-    state.entityIds = ids;
-  }
-}
-
 async function loadTile(tileKey: string) {
   if (!ctx) return;
   const [zS, xS, yS] = tileKey.split('/');
@@ -183,8 +161,8 @@ async function loadTile(tileKey: string) {
     if (state) state.status = 'error';
     return;
   }
-  const buildings = parseOverpassToBuildings(data);
-  addTileToScene(tileKey, buildings);
+  // Hand off parsing to the worker.
+  ctx.worker.postMessage({ tileKey, data });
 }
 
 function scheduleUpdate() {
@@ -200,12 +178,14 @@ function scheduleUpdate() {
     for (const key of tiles) {
       const s = tileCache.get(key);
       if (!s) {
-        if (started >= MAX_TILES_PER_FRAME) continue;
+        if (started >= MAX_TILES_PER_PASS) continue;
         tileCache.set(key, { status: 'loading', entityIds: [] });
         started++;
         loadTile(key);
+      } else if (s.status === 'ready' && s.entityIds.length === 0 && s.buildings) {
+        // Re-attach instantly from cache after a previous disable.
+        attachBuildingsToScene(key, s.buildings);
       }
-      // If already ready, entities are already in the ds (we never detach in this MVP).
     }
   }, DEBOUNCE_MS);
 }
@@ -219,14 +199,18 @@ export function enableBuildings(viewer: any) {
       return created;
     })();
   ds.show = true;
-  ctx = { viewer, ds, active: true };
 
-  // Re-attach cached tiles instantly.
-  for (const [, state] of tileCache) {
-    if (state.status === 'ready' && state.entityIds.length === 0) {
-      state.status = 'idle'; // entities were cleared previously — refetch
-    }
-  }
+  const worker = new Worker(
+    new URL('../workers/buildingsParser.worker.ts', import.meta.url),
+    { type: 'module' },
+  );
+  worker.onmessage = (e: MessageEvent) => {
+    const { tileKey, buildings } = e.data as { tileKey: string; buildings: any[] };
+    if (!ctx || !ctx.active) return;
+    attachBuildingsToScene(tileKey, buildings);
+  };
+
+  ctx = { viewer, ds, worker, active: true };
 
   const onChanged = () => scheduleUpdate();
   viewer.camera.changed.addEventListener(onChanged);
@@ -239,12 +223,13 @@ export function disableBuildings(viewer: any) {
   ctx.active = false;
   clearTimeout(ctx.debounceTimer);
   ctx.removeListener?.();
+  try { ctx.worker.terminate(); } catch { /* noop */ }
   const ds = ctx.ds;
   if (ds) {
     ds.entities.removeAll();
     ds.show = false;
   }
-  // Mark cached tiles as needing re-attach next enable (entities removed).
+  // Cached parsed buildings remain in tileCache; entityIds cleared so re-enable re-attaches instantly.
   for (const state of tileCache.values()) {
     state.entityIds = [];
   }
