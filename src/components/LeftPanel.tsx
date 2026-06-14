@@ -52,7 +52,7 @@ const INFRA_TOGGLES: ToggleItem[] = [
 
 const EXTRAS_TOGGLES: ToggleItem[] = [
   { key: 'buildings', label: '3D BUILDINGS', icon: Building },
-  { key: 'earthquakes', label: 'EARTHQUAKES (LIVE)', icon: Zap },
+  { key: 'earthquakes', label: 'EARTHQUAKES', icon: Zap },
 ];
 
 const DATA_LAYER_TOGGLES: ToggleItem[] = [
