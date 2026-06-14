@@ -21,7 +21,14 @@ declare const Cesium: any;
 
 // ---- SVG Icon Data URIs ----
 const mkIcon = (svg: string) =>
-  "data:image/svg+xml;base64," + btoa(svg);
+  "data:image/svg+xml;base64," + btoa(
+    svg
+      .replace(/\n/g, "")
+      .replace(/\r/g, "")
+      .replace(/\t/g, "")
+      .replace(/\s\s+/g, " ")
+      .trim()
+  );
 
 // High-contrast vector silhouettes with a soft outer glow. Rendered at 2x for
 // crisp scaling. Always billboarded, rotated to the entity heading.
