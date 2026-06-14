@@ -20,7 +20,8 @@ import { enableTraffic, disableTraffic } from '@/layers/traffic';
 declare const Cesium: any;
 
 // ---- SVG Icon Data URIs ----
-const mkIcon = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
+const mkIcon = (svg: string) =>
+  "data:image/svg+xml;base64," + btoa(svg);
 
 // High-contrast vector silhouettes with a soft outer glow. Rendered at 2x for
 // crisp scaling. Always billboarded, rotated to the entity heading.
