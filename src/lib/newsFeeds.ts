@@ -87,77 +87,236 @@ export async function fetchAggregatedNews(force = false): Promise<NewsArticle[]>
   return merged;
 }
 
-// ---- Full article fetching + sanitization ----
+// =========================================================
+//  FAST ML‑STYLE ARTICLE EXTRACTOR (DENSITY + BOILERPLATE)
+// =========================================================
 
-const DROP_TAGS = ['script','style','noscript','iframe','form','svg','aside','nav','header','footer','button','link','meta'];
+const HTML_PROXY = "/api/proxy?url=";
 
-function sanitizeHtml(html: string): string {
-  if (typeof DOMParser === 'undefined') return '';
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  DROP_TAGS.forEach(tag => doc.querySelectorAll(tag).forEach(n => n.remove()));
-  // strip class attribs/ids/event handlers
-  doc.querySelectorAll<HTMLElement>('*').forEach(el => {
-    [...el.attributes].forEach(a => {
-      const n = a.name.toLowerCase();
-      if (n.startsWith('on')) el.removeAttribute(a.name);
-      else if (['class','id','style','data-src','srcset','sizes'].includes(n)) el.removeAttribute(a.name);
-    });
+// Tags we never want
+const DROP_TAGS = [
+  "script","style","noscript","iframe","form","svg","aside","nav",
+  "header","footer","button","link","meta","video","audio"
+];
+
+// Utility: remove garbage nodes fast
+function stripBoilerplate(root: HTMLElement) {
+  DROP_TAGS.forEach(tag => {
+    root.querySelectorAll(tag).forEach(n => n.remove());
   });
-  const article = doc.querySelector('article') || doc.querySelector('main') || doc.body;
-  if (!article) return '';
-  // Keep only allowed tags
-  const allowed = new Set(['ARTICLE','P','H1','H2','H3','H4','IMG','UL','OL','LI','BLOCKQUOTE','STRONG','EM','BR','FIGURE','FIGCAPTION','DIV','SPAN','A']);
-  const walk = (root: Element) => {
-    [...root.children].forEach(c => {
-      if (!allowed.has(c.tagName)) { c.remove(); return; }
-      walk(c);
-    });
-  };
-  walk(article);
-  return article.innerHTML;
+
+  // Remove elements with no text content
+  root.querySelectorAll("*").forEach(el => {
+    if (!el.textContent?.trim() && el.tagName !== "IMG") el.remove();
+  });
 }
+
+// =========================================================
+//  TEXT‑DENSITY SCORING (ML‑STYLE HEURISTIC)
+// =========================================================
+// Score = (#text chars) / (#child nodes + 1)
+// Higher score = more likely to be the main article body
+// =========================================================
+
+function scoreNode(el: Element): number {
+  const text = el.textContent?.trim() || "";
+  const chars = text.length;
+  const kids = el.children.length;
+  return chars / (kids + 1);
+}
+
+function findBestContentNode(doc: Document): HTMLElement {
+  const candidates = [...doc.querySelectorAll("article, main, section, div")];
+
+  let best: HTMLElement = doc.body;
+  let bestScore = 0;
+
+  for (const el of candidates) {
+    const s = scoreNode(el);
+    if (s > bestScore) {
+      bestScore = s;
+      best = el as HTMLElement;
+    }
+  }
+
+  return best;
+}
+
+// =========================================================
+//  READABLE BLOCK EXTRACTOR
+// =========================================================
+// Keeps only meaningful blocks: p, h1‑h4, li, img, blockquote
+// =========================================================
+
+function extractReadableBlocks(root: HTMLElement): string {
+  const blocks = [...root.querySelectorAll("p, h1, h2, h3, h4, li, img, blockquote")];
+
+  return blocks
+    .map(b => {
+      if (b.tagName === "IMG") {
+        const src = (b as HTMLImageElement).src || b.getAttribute("data-src");
+        return src ? `<img src="${src}" />` : "";
+      }
+      return b.outerHTML;
+    })
+    .join("\n");
+}
+
+// =========================================================
+//  HEADLINE + SUMMARY + BODY CLASSIFIER
+// =========================================================
+// Headline = first <h1> or <title>
+// Summary = first <p> under headline OR first <p> in article
+// Body = remaining blocks
+// =========================================================
+
+function classifyContent(doc: Document, blocksHtml: string) {
+  const headline =
+    doc.querySelector("h1")?.textContent?.trim() ||
+    doc.querySelector("title")?.textContent?.trim() ||
+    "Article";
+
+  const temp = document.createElement("div");
+  temp.innerHTML = blocksHtml;
+
+  const paragraphs = [...temp.querySelectorAll("p")];
+  const summary = paragraphs[0]?.textContent?.trim() || "";
+
+  return {
+    headline,
+    summary,
+    bodyHtml: blocksHtml
+  };
+}
+
+// =========================================================
+//  MAIN EXTRACTOR
+// =========================================================
 
 export async function fetchFullArticle(url: string): Promise<FullArticle> {
   const res = await fetch(`${HTML_PROXY}${encodeURIComponent(url)}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
   const html = await res.text();
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const title = doc.querySelector('h1')?.textContent?.trim()
-    || doc.querySelector('title')?.textContent?.trim()
-    || 'Article';
-  const ogImg = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || undefined;
-  return { title, html: sanitizeHtml(html), image: ogImg };
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  // Step 1: Remove boilerplate
+  stripBoilerplate(doc.body);
+
+  // Step 2: Find the most content‑dense node
+  const bestNode = findBestContentNode(doc);
+
+  // Step 3: Extract readable blocks
+  const blocksHtml = extractReadableBlocks(bestNode);
+
+  // Step 4: Classify headline + summary + body
+  const { headline, summary, bodyHtml } = classifyContent(doc, blocksHtml);
+
+  // Step 5: Extract OG image if available
+  const ogImg =
+    doc.querySelector('meta[property="og:image"]')?.getAttribute("content") ||
+    undefined;
+
+  return {
+    title: headline,
+    summary,
+    html: bodyHtml,
+    image: ogImg
+  };
 }
 
-// ---- Location extraction + geocoding (Nominatim, no key) ----
+// =========================================================
+//  INTELLIGENT LOCATION EXTRACTOR (ML‑STYLE HEURISTICS)
+// =========================================================
 
-const PLACES = [
-  'Ukraine','Russia','Moscow','Kyiv','Kiev','China','Beijing','Taiwan','Taipei','Japan','Tokyo',
-  'United States','Washington','New York','Iran','Tehran','Israel','Tel Aviv','Jerusalem','Gaza',
-  'Lebanon','Beirut','Syria','Damascus','Iraq','Baghdad','Turkey','Ankara','Istanbul','India',
-  'New Delhi','Pakistan','Islamabad','North Korea','Pyongyang','South Korea','Seoul','Germany',
-  'Berlin','France','Paris','United Kingdom','London','Poland','Warsaw','Sudan','Khartoum',
-  'Yemen','Sanaa','Saudi Arabia','Riyadh','Egypt','Cairo','Libya','Tripoli','Afghanistan','Kabul',
-  'Venezuela','Caracas','Mexico','Brazil','Brasilia','Argentina','Canada','Ottawa','Australia',
-  'Spain','Madrid','Italy','Rome','Greece','Athens','Hungary','Romania','Bulgaria','Belarus',
-  'Minsk','Georgia','Tbilisi','Armenia','Azerbaijan','Baku','Kazakhstan','NATO','European Union',
-  'Crimea','Donetsk','Luhansk','Mariupol','Kharkiv','Odesa','Kherson','West Bank','Rafah','Khan Younis',
-];
+// 1. A lightweight gazetteer (countries + capitals + major cities + conflict zones)
+import WORLD_PLACES from './gazetteer.json';
+// gazetteer.json = ~5,000 entries: { name, alt, type, priority }
+
+// Example entry:
+// { "name": "Khartoum", "alt": ["Kartum"], "type": "city", "priority": 3 }
+
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s\-]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+// 2. Fuzzy match (Levenshtein-lite)
+function fuzzyMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 2) return false;
+
+  let mismatches = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) mismatches++;
+    if (mismatches > 2) return false;
+  }
+  return true;
+}
+
+// 3. ML-style scoring
+// Score = (match strength) * (priority) * (context weight)
+function scoreLocation(name: string, tokens: string[], entry: any): number {
+  let score = 0;
+
+  // direct match
+  if (tokens.includes(name.toLowerCase())) score += 5;
+
+  // fuzzy match
+  for (const t of tokens) {
+    if (fuzzyMatch(t, name.toLowerCase())) score += 3;
+  }
+
+  // alt names
+  if (entry.alt) {
+    for (const alt of entry.alt) {
+      if (tokens.includes(alt.toLowerCase())) score += 4;
+      for (const t of tokens) {
+        if (fuzzyMatch(t, alt.toLowerCase())) score += 2;
+      }
+    }
+  }
+
+  // priority (country > capital > city > region)
+  score *= entry.priority;
+
+  return score;
+}
+
+// =========================================================
+//  MAIN LOCATION EXTRACTOR
+// =========================================================
 
 export function extractLocation(text: string): string | null {
-  const lower = text.toLowerCase();
-  for (const p of PLACES) {
-    const re = new RegExp(`\\b${p.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`);
-    if (re.test(lower)) return p;
+  const tokens = tokenize(text);
+
+  let best = null;
+  let bestScore = 0;
+
+  for (const entry of WORLD_PLACES) {
+    const s = scoreLocation(entry.name, tokens, entry);
+    if (s > bestScore) {
+      bestScore = s;
+      best = entry.name;
+    }
   }
-  return null;
+
+  return bestScore > 0 ? best : null;
 }
+
+// =========================================================
+//  GEOCODING (unchanged)
+// =========================================================
 
 export async function geocode(query: string): Promise<{ lat: number; lon: number } | null> {
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`, {
-      headers: { 'Accept': 'application/json' },
-    });
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`,
+      { headers: { "Accept": "application/json" } }
+    );
     if (!res.ok) return null;
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return null;
