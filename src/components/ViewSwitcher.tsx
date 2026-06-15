@@ -9,8 +9,9 @@ interface Props {
 
 export function ViewSwitcher({ view, onChange }: Props) {
   return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
-      <div className="flex items-center gap-1 p-1 rounded-full glass-panel bg-card/70 border border-foreground/15 shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+    <div className="pointer-events-none absolute top-4 left-0 w-full flex justify-center z-50">
+      {/* This inner wrapper centers relative to the globe area */}
+      <div className="pointer-events-auto flex items-center gap-1 p-1 rounded-full glass-panel bg-card/70 border border-foreground/15 shadow-[0_8px_30px_rgba(0,0,0,0.55)] backdrop-blur-xl max-w-[calc(100vw-340px)]">
         {([
           { id: 'global', label: 'Global View', icon: Globe2 },
           { id: 'news',   label: 'News',        icon: Newspaper },
