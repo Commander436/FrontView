@@ -3,6 +3,8 @@ import { LeftPanel } from '@/components/LeftPanel';
 import { RightPanel } from '@/components/RightPanel';
 import { GlobeView } from '@/components/GlobeView';
 import { ScopeOverlay } from '@/components/ScopeOverlay';
+import { ViewSwitcher, type AppView } from '@/components/ViewSwitcher';
+import { NewsPanel } from '@/components/NewsPanel';
 import { useGlobeState } from '@/hooks/useGlobeState';
 import { useAircraft } from '@/hooks/useAircraft';
 import { useSatellites } from '@/hooks/useSatellites';
@@ -63,6 +65,19 @@ const Index = () => {
 
   // Play intro entry animations only on first mount (i.e. right after the terminal intro)
   const [introAnim] = useState(true);
+
+  // Global ↔ News view switcher
+  const [view, setView] = useState<AppView>('global');
+  const [hasNavigated, setHasNavigated] = useState(false);
+  const changeView = (v: AppView) => {
+    if (v === view) return;
+    setHasNavigated(true);
+    setView(v);
+  };
+
+  const leftAnim   = !hasNavigated ? 'intro-left-in'   : view === 'news' ? 'view-slide-out-left'  : 'view-slide-in-left';
+  const bottomAnim = !hasNavigated ? 'intro-bottom-in' : view === 'news' ? 'view-slide-out-down'  : 'view-slide-in-bottom';
+  const rightAnim  = view === 'news' ? 'view-slide-out-right' : hasNavigated ? 'view-slide-in-right' : '';
 
   // Keep the selected annotation in sync with edits (rename/style/icon/color)
   useEffect(() => {
@@ -204,7 +219,8 @@ const Index = () => {
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-background">
-      <div className={introAnim ? 'intro-left-in flex' : 'flex'}>
+      <ViewSwitcher view={view} onChange={changeView} />
+      <div className={`${leftAnim} flex`}>
       <LeftPanel
         layers={layers}
         onToggleLayer={toggleLayer}
@@ -248,7 +264,7 @@ const Index = () => {
         </div>
 
         {/* Unified bottom-center tactical dock */}
-        <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-30 ${introAnim ? 'intro-bottom-in' : ''}`}>
+        <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-30 ${bottomAnim}`}>
           <div className="flex flex-col items-stretch gap-2 p-2.5 rounded-2xl glass-panel bg-card/70 border border-foreground/15 shadow-[0_10px_40px_rgba(0,0,0,0.55)] backdrop-blur-md">
             {/* Search bar */}
             <form onSubmit={handleSearch} className="relative">
@@ -371,16 +387,20 @@ const Index = () => {
             onCancel={() => setPendingPoint(null)}
           />
         )}
+
+        <NewsPanel active={view === 'news'} onRequestGlobal={() => changeView('global')} />
       </main>
-      <RightPanel
-        selectedEntity={selectedEntity}
-        onClose={() => selectEntity(null)}
-        onAnnotationColor={updateColor}
-        onAnnotationRename={updateTitle}
-        onAnnotationStyle={updateStyle}
-        onAnnotationIcon={updateIcon}
-        onAnnotationDelete={(id) => { remove(id); selectEntity(null); }}
-      />
+      <div className={rightAnim}>
+        <RightPanel
+          selectedEntity={selectedEntity}
+          onClose={() => selectEntity(null)}
+          onAnnotationColor={updateColor}
+          onAnnotationRename={updateTitle}
+          onAnnotationStyle={updateStyle}
+          onAnnotationIcon={updateIcon}
+          onAnnotationDelete={(id) => { remove(id); selectEntity(null); }}
+        />
+      </div>
     </div>
   );
 };
