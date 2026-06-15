@@ -203,11 +203,7 @@
 .intro-bottom-in  { animation: slide-in-bottom-dock 800ms cubic-bezier(0.22,1,0.36,1) 600ms both; }
 .intro-hud-in     { animation: fade-in-soft 900ms ease-out 900ms both; }
 
-/* =========================================================
-   GLOBAL ↔ NEWS TRANSITIONS (FIXED, SYMMETRICAL, CLEAN)
-   ========================================================= */
-
-/* Global UI slide-out */
+/* ===== Global UI slide-out / slide-in (keep as-is if working) ===== */
 @keyframes slide-out-left   { from { transform: translateX(0); } to { transform: translateX(-120%); } }
 @keyframes slide-out-right  { from { transform: translateX(0); } to { transform: translateX(120%); } }
 @keyframes slide-out-down   { from { transform: translateY(0); } to { transform: translateY(200%); } }
@@ -216,34 +212,33 @@
 .view-slide-out-right  { animation: slide-out-right  500ms cubic-bezier(0.7,0,0.3,1) both; }
 .view-slide-out-down   { animation: slide-out-down   500ms cubic-bezier(0.7,0,0.3,1) both; }
 
-/* Global UI slide-in */
 @keyframes slide-in-from-left   { from { transform: translateX(-120%); } to { transform: translateX(0); } }
-@keyframes slide-in-from-right  { from { transform: translateX(120%); }  to { transform: translateX(0); } }
-@keyframes slide-in-from-bottom { from { transform: translateY(200%); }   to { transform: translateY(0); } }
+@keyframes slide-in-from-right  { from { transform: translateX(120%);  } to { transform: translateX(0); } }
+@keyframes slide-in-from-bottom { from { transform: translateY(200%);   } to { transform: translateY(0); } }
 
 .view-slide-in-left    { animation: slide-in-from-left   600ms cubic-bezier(0.22,1,0.36,1) both; }
 .view-slide-in-right   { animation: slide-in-from-right  600ms cubic-bezier(0.22,1,0.36,1) both; }
 .view-slide-in-bottom  { animation: slide-in-from-bottom 600ms cubic-bezier(0.22,1,0.36,1) both; }
 
-/* =========================================================
-   NEWS PANEL — FIXED SYMMETRICAL HALVES
-   ========================================================= */
-
+/* ===== NEWS PANEL ROOT: LOCKED TO VIEWPORT ===== */
 .news-root {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   display: flex;
   flex-direction: row;
-  justify-content: center;
   align-items: stretch;
+  justify-content: flex-start;
   z-index: 40;
-  pointer-events: none; /* children override */
+  pointer-events: none;
 }
 
+/* Each half is exactly half the viewport width */
 .news-half {
-  flex: 1 1 50%;
-  max-width: 50%;
-  height: 100%;
+  width: 50vw;
+  height: 100vh;
   pointer-events: auto;
   margin: 0;
   padding: 0;
@@ -252,24 +247,21 @@
   transform: translateX(0);
 }
 
-/* Left + Right halves slide in symmetrically */
+/* Left + Right halves slide in symmetrically from edges of the viewport */
 @keyframes news-half-left-in  { from { transform: translateX(-100%); } to { transform: translateX(0); } }
-@keyframes news-half-right-in { from { transform: translateX(100%); }  to { transform: translateX(0); } }
+@keyframes news-half-right-in { from { transform: translateX(100%);  } to { transform: translateX(0); } }
 
 .news-half-left-in  { animation: news-half-left-in  550ms cubic-bezier(0.7,0,0.3,1) both; }
 .news-half-right-in { animation: news-half-right-in 550ms cubic-bezier(0.7,0,0.3,1) both; }
 
-/* Halves slide out symmetrically */
+/* Halves slide out symmetrically back to edges */
 @keyframes news-half-left-out  { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 @keyframes news-half-right-out { from { transform: translateX(0); } to { transform: translateX(100%); } }
 
 .news-half-left-out  { animation: news-half-left-out  450ms cubic-bezier(0.7,0,0.3,1) both; }
 .news-half-right-out { animation: news-half-right-out 450ms cubic-bezier(0.7,0,0.3,1) both; }
 
-/* =========================================================
-   NEWS PANEL EXPANSION (SEPARATE WRAPPER TO AVOID CONFLICT)
-   ========================================================= */
-
+/* ===== INNER PANEL EXPANSION (NO TRANSFORM CONFLICTS) ===== */
 .news-panel {
   width: 100%;
   height: 100%;
@@ -285,7 +277,7 @@
   animation: news-expand-y 450ms cubic-bezier(0.7,0,0.3,1) 550ms both;
 }
 
-/* Article list fade-in AFTER expansion */
+/* Article list fade-in after expansion */
 @keyframes news-list-fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
