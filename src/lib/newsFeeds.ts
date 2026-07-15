@@ -390,15 +390,27 @@ function scoreLocation(name: string, tokens: string[], entry: any): number {
 // =========================================================
 
 export function extractLocation(text: string): string | null {
-  const tokens = tokenize(text);
+  const lower = ' ' + text.toLowerCase().replace(/[^a-z0-9\s\-]/g, ' ').replace(/\s+/g, ' ') + ' ';
 
-  let best = null;
+  let best: string | null = null;
   let bestScore = 0;
 
+  const matchTerm = (term: string) => {
+    const t = term.toLowerCase();
+    // whole-word / phrase boundary match
+    const idx = lower.indexOf(' ' + t + ' ');
+    return idx >= 0;
+  };
+
   for (const entry of WORLD_PLACES) {
-    const s = scoreLocation(entry.name, tokens, entry);
-    if (s > bestScore) {
-      bestScore = s;
+    let score = 0;
+    if (matchTerm(entry.name)) score += 5;
+    if (entry.alt) {
+      for (const alt of entry.alt) if (matchTerm(alt)) score += 4;
+    }
+    score *= entry.priority;
+    if (score > bestScore) {
+      bestScore = score;
       best = entry.name;
     }
   }
