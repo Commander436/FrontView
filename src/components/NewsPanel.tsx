@@ -37,6 +37,10 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
     }
     if (!active && (phase === 'open' || phase === 'enter')) {
       setPhase('exit');
+      // Clear any open article so the modal doesn't linger during exit and
+      // block pointer events on the globe when we return to Global View.
+      setSelected(null);
+      setFull(null);
       const t = setTimeout(() => setPhase('closed'), 500);
       return () => clearTimeout(t);
     }
