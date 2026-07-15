@@ -237,6 +237,9 @@ const Index = () => {
       />
       </div>
       <main className="flex-1 relative min-w-0">
+        {/* View switcher anchored to the globe area so it stays centered
+            over whatever space is left by the side panels. */}
+        <ViewSwitcher view={view} onChange={changeView} />
         <div className={`relative w-full h-full ${introAnim ? 'intro-globe-in' : ''}`}>
           <GlobeView
             layers={layers}
@@ -402,12 +405,6 @@ const Index = () => {
           viewport (including the side panels) and slides in from the true
           screen edges. */}
       <NewsPanel active={view === 'news'} onRequestGlobal={() => changeView('global')} />
-      {/* View switcher lives at the very top of the tree with the highest
-          z-index so it stays visible and clickable in BOTH Global and News
-          views. It is fixed-centered to the viewport. */}
-      <div className="fixed top-0 left-0 right-0 z-[1000000] pointer-events-none animate-fade-in">
-        <ViewSwitcher view={view} onChange={changeView} />
-      </div>
     </div>
   );
 };
