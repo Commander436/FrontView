@@ -91,8 +91,6 @@ export async function fetchAggregatedNews(force = false): Promise<NewsArticle[]>
 //  FAST ML‑STYLE ARTICLE EXTRACTOR (DENSITY + BOILERPLATE)
 // =========================================================
 
-const HTML_PROXY = "/api/proxy?url=";
-
 // Tags we never want
 const DROP_TAGS = [
   "script","style","noscript","iframe","form","svg","aside","nav",
@@ -230,8 +228,7 @@ export async function fetchFullArticle(url: string): Promise<FullArticle> {
 // =========================================================
 
 // 1. A lightweight gazetteer (countries + capitals + major cities + conflict zones)
-import WORLD_PLACES from './gazetteer.json';
-// gazetteer.json = ~5,000 entries: { name, alt, type, priority }
+const WORLD_PLACES: Array<{ name: string; alt?: string[]; type: string; priority: number }> = [];
 
 // Example entry:
 // { "name": "Khartoum", "alt": ["Kartum"], "type": "city", "priority": 3 }

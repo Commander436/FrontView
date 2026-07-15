@@ -12,4 +12,5 @@ export interface FullArticle {
   title: string;
   html: string; // sanitized
   image?: string;
+  summary?: string;
 }
