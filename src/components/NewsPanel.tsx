@@ -37,12 +37,18 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
     }
     if (!active && (phase === 'open' || phase === 'enter')) {
       setPhase('exit');
+      // Clear any open article so the modal doesn't linger during exit and
+      // block pointer events on the globe when we return to Global View.
+      setSelected(null);
+      setFull(null);
       const t = setTimeout(() => setPhase('closed'), 500);
       return () => clearTimeout(t);
     }
   }, [active, phase]);
 
   if (phase === 'closed') return null;
+
+  const rootPointer = phase === 'exit' ? 'pointer-events-none' : '';
 
   const openArticle = async (a: NewsArticle) => {
     setSelected(a);
@@ -94,7 +100,7 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
   const halvesExiting  = phase === 'exit';
 
   return (
-    <div className="absolute inset-0 z-40 pointer-events-none">
+    <div className={`fixed inset-0 z-[9999] ${rootPointer}`}>
       {/* Two halves slide in, then merge & expand */}
       <div className="absolute inset-0 flex pointer-events-auto">
         <div

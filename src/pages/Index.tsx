@@ -219,7 +219,6 @@ const Index = () => {
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-background">
-      <ViewSwitcher view={view} onChange={changeView} />
       <div className={`${leftAnim} flex`}>
       <LeftPanel
         layers={layers}
@@ -238,6 +237,9 @@ const Index = () => {
       />
       </div>
       <main className="flex-1 relative min-w-0">
+        {/* View switcher anchored to the globe area so it stays centered
+            over whatever space is left by the side panels. */}
+        <ViewSwitcher view={view} onChange={changeView} />
         <div className={`relative w-full h-full ${introAnim ? 'intro-globe-in' : ''}`}>
           <GlobeView
             layers={layers}
@@ -387,8 +389,6 @@ const Index = () => {
             onCancel={() => setPendingPoint(null)}
           />
         )}
-
-        <NewsPanel active={view === 'news'} onRequestGlobal={() => changeView('global')} />
       </main>
       <div className={rightAnim}>
         <RightPanel
@@ -401,6 +401,10 @@ const Index = () => {
           onAnnotationDelete={(id) => { remove(id); selectEntity(null); }}
         />
       </div>
+      {/* News panel is a top-level fixed overlay so it covers the ENTIRE
+          viewport (including the side panels) and slides in from the true
+          screen edges. */}
+      <NewsPanel active={view === 'news'} onRequestGlobal={() => changeView('global')} />
     </div>
   );
 };
