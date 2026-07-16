@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LeftPanel } from '@/components/LeftPanel';
 import { RightPanel } from '@/components/RightPanel';
 import { GlobeView } from '@/components/GlobeView';
@@ -69,11 +69,46 @@ const Index = () => {
   // Global ↔ News view switcher
   const [view, setView] = useState<AppView>('global');
   const [hasNavigated, setHasNavigated] = useState(false);
+  const [switcherTransitioning, setSwitcherTransitioning] = useState(false);
   const changeView = (v: AppView) => {
     if (v === view) return;
     setHasNavigated(true);
-    setView(v);
+    // Fade the switcher out, swap views mid-fade, then fade back in once the
+    // new layout has settled so it re-centers on the correct anchor.
+    setSwitcherTransitioning(true);
+    setTimeout(() => setView(v), 250);
+    setTimeout(() => setSwitcherTransitioning(false), 1200);
   };
+
+  // Track the horizontal center of the globe area so the top-center switcher
+  // stays anchored to the visible globe (not the viewport) in Global view,
+  // and re-centers on the viewport in News view.
+  const mainRef = useRef<HTMLElement | null>(null);
+  const [switcherCenterX, setSwitcherCenterX] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (view === 'news') {
+      setSwitcherCenterX(undefined); // center on viewport
+      return;
+    }
+    const measure = () => {
+      const el = mainRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setSwitcherCenterX(r.left + r.width / 2);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (mainRef.current) ro.observe(mainRef.current);
+    window.addEventListener('resize', measure);
+    // Re-measure a few times as slide animations settle
+    const t1 = setTimeout(measure, 300);
+    const t2 = setTimeout(measure, 700);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+      clearTimeout(t1); clearTimeout(t2);
+    };
+  }, [view, leftCollapsed, selectedEntity]);
 
   const leftAnim   = !hasNavigated ? 'intro-left-in'   : view === 'news' ? 'view-slide-out-left'  : 'view-slide-in-left';
   const bottomAnim = !hasNavigated ? 'intro-bottom-in' : view === 'news' ? 'view-slide-out-down'  : 'view-slide-in-bottom';
@@ -236,10 +271,7 @@ const Index = () => {
         onClearAllAnnotations={clearAll}
       />
       </div>
-      <main className="flex-1 relative min-w-0">
-        {/* View switcher anchored to the globe area so it stays centered
-            over whatever space is left by the side panels. */}
-        <ViewSwitcher view={view} onChange={changeView} />
+      <main ref={mainRef} className="flex-1 relative min-w-0">
         <div className={`relative w-full h-full ${introAnim ? 'intro-globe-in' : ''}`}>
           <GlobeView
             layers={layers}
@@ -401,6 +433,14 @@ const Index = () => {
           onAnnotationDelete={(id) => { remove(id); selectEntity(null); }}
         />
       </div>
+      {/* Top-level view switcher — stays mounted across view changes, fades
+          out mid-transition and re-anchors to the correct center. */}
+      <ViewSwitcher
+        view={view}
+        onChange={changeView}
+        centerX={switcherCenterX}
+        transitioning={switcherTransitioning}
+      />
       {/* News panel is a top-level fixed overlay so it covers the ENTIRE
           viewport (including the side panels) and slides in from the true
           screen edges. */}
