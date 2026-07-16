@@ -5,19 +5,22 @@ export type AppView = 'global' | 'news';
 interface Props {
   view: AppView;
   onChange: (v: AppView) => void;
+  /** Absolute x-coordinate (viewport px) to center on. If undefined, centers on viewport. */
+  centerX?: number;
+  /** When true, the switcher fades out (used mid-transition). */
+  transitioning?: boolean;
 }
 
-export function ViewSwitcher({ view, onChange }: Props) {
+export function ViewSwitcher({ view, onChange, centerX, transitioning }: Props) {
   return (
     <div
-      className="
-        pointer-events-none
-        absolute
-        top-4
-        left-1/2
-        -translate-x-1/2
-        z-50
-      "
+      className="pointer-events-none fixed top-4 z-[10001]"
+      style={{
+        left: centerX != null ? `${centerX}px` : '50%',
+        transform: 'translateX(-50%)',
+        opacity: transitioning ? 0 : 1,
+        transition: 'left 500ms cubic-bezier(0.22,1,0.36,1), opacity 350ms ease-out',
+      }}
     >
       <div
         className="
