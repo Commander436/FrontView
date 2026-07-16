@@ -188,27 +188,47 @@ function classifyContent(doc: Document, blocksHtml: string) {
 }
 
 // =========================================================
-//  MAIN EXTRACTOR
+//  MAIN EXTRACTOR (Improved Reliability + Multi‑Node Merge)
 // =========================================================
 
 export async function fetchFullArticle(url: string): Promise<FullArticle> {
   const res = await fetch(`${HTML_PROXY}${encodeURIComponent(url)}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  const html = await res.text();
-  const doc = new DOMParser().parseFromString(html, "text/html");
+  // SAFER PARSE (prevents early DOM truncation)
+  let html = await res.text();
+  let doc = new DOMParser().parseFromString(html, "text/html");
+
+  if (!doc || !doc.body) {
+    // fallback if DOMParser chokes
+    html = html.replace(/<script[\s\S]*?<\/script>/gi, "");
+    doc = new DOMParser().parseFromString(html, "text/html");
+  }
 
   // Step 1: Remove boilerplate
   stripBoilerplate(doc.body);
 
-  // Step 2: Find the most content‑dense node
-  const bestNode = findBestContentNode(doc);
+  // Step 2: Find multiple content‑dense nodes (instead of just one)
+  const candidates = [...doc.querySelectorAll("article, main, section, div")];
+  const scored = candidates
+    .map(el => ({
+      el,
+      score:
+        (el.textContent?.trim().length || 0) +
+        el.querySelectorAll("p, li, h1, h2, h3, h4").length * 50
+    }))
+    .sort((a, b) => b.score - a.score);
 
-  // Step 3: Extract readable blocks
-  const blocksHtml = extractReadableBlocks(bestNode);
+  // Take top 2–3 nodes to avoid partial extraction
+  const bestNodes = scored.slice(0, 3).map(s => s.el);
+
+  // Step 3: Extract readable blocks from ALL top nodes
+  const blocksHtml = bestNodes
+    .map(node => extractReadableBlocks(node))
+    .join("\n");
 
   // Step 4: Classify headline + summary + body
-  const { headline, summary, bodyHtml } = classifyContent(doc, blocksHtml);
+  const { headline, summary } = classifyContent(doc, blocksHtml);
 
   // Step 5: Extract OG image if available
   const ogImg =
@@ -218,7 +238,7 @@ export async function fetchFullArticle(url: string): Promise<FullArticle> {
   return {
     title: headline,
     summary,
-    html: bodyHtml,
+    html: blocksHtml,
     image: ogImg
   };
 }
