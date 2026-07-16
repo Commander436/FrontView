@@ -114,7 +114,6 @@ function stripBoilerplate(root: HTMLElement) {
       "p, img, li, blockquote, h1, h2, h3, h4"
     );
 
-    // Only remove if BOTH are missing
     if (!hasText && !hasMeaningfulChild) {
       el.remove();
     }
@@ -122,40 +121,39 @@ function stripBoilerplate(root: HTMLElement) {
 }
 
 // =========================================================
-//  TEXT‑DENSITY SCORING (ML‑STYLE HEURISTIC)
+//  FIXED TEXT‑DENSITY SCORING (no more tiny nodes)
 // =========================================================
-// Score = (#text chars) / (#child nodes + 1)
-// Higher score = more likely to be the main article body
+// Score = (#text chars) + (#paragraphs * 200) + (#headers * 300)
+// This heavily favors REAL article bodies.
 // =========================================================
 
 function scoreNode(el: Element): number {
   const text = el.textContent?.trim() || "";
   const chars = text.length;
-  const kids = el.children.length;
-  return chars / (kids + 1);
+
+  const pCount = el.querySelectorAll("p").length;
+  const hCount = el.querySelectorAll("h1, h2, h3, h4").length;
+
+  return chars + pCount * 200 + hCount * 300;
 }
 
-function findBestContentNode(doc: Document): HTMLElement {
+// =========================================================
+//  FIXED BEST‑NODE FINDER (multi‑node selection)
+// =========================================================
+
+function findBestContentNodes(doc: Document): HTMLElement[] {
   const candidates = [...doc.querySelectorAll("article, main, section, div")];
 
-  let best: HTMLElement = doc.body;
-  let bestScore = 0;
+  const scored = candidates
+    .map(el => ({ el, score: scoreNode(el) }))
+    .sort((a, b) => b.score - a.score);
 
-  for (const el of candidates) {
-    const s = scoreNode(el);
-    if (s > bestScore) {
-      bestScore = s;
-      best = el as HTMLElement;
-    }
-  }
-
-  return best;
+  // Take top 3 nodes instead of 1
+  return scored.slice(0, 3).map(s => s.el as HTMLElement);
 }
 
 // =========================================================
-//  READABLE BLOCK EXTRACTOR
-// =========================================================
-// Keeps only meaningful blocks: p, h1‑h4, li, img, blockquote
+//  READABLE BLOCK EXTRACTOR (unchanged)
 // =========================================================
 
 function extractReadableBlocks(root: HTMLElement): string {
