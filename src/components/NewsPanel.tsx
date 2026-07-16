@@ -74,7 +74,7 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
       if (!geo) { toast.error(`Could not geocode "${place}"`); return; }
       toast.success(`Locating ${place} on globe`);
       onRequestGlobal();
-      // wait for view transition then fly
+      // wait for News panel to fully unmount + view swap animation before flying
       setTimeout(() => {
         const viewer = (window as any).__cesiumViewer;
         if (!viewer || viewer.isDestroyed() || typeof Cesium === 'undefined') return;
@@ -90,7 +90,7 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
           label: { text: place, font: '12px Orbitron', fillColor: Cesium.Color.WHITE, showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.6), pixelOffset: new Cesium.Cartesian2(0, -22), disableDepthTestDistance: Number.POSITIVE_INFINITY },
         });
         setTimeout(() => { try { viewer.entities.removeById(id); } catch {} }, 30000);
-      }, 700);
+      }, 1100);
     } finally {
       setLocating(false);
     }
