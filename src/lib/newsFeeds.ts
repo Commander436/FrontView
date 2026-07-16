@@ -97,15 +97,27 @@ const DROP_TAGS = [
   "header","footer","button","link","meta","video","audio"
 ];
 
-// Utility: remove garbage nodes fast
+// Utility: remove garbage nodes safely (keeps article containers)
 function stripBoilerplate(root: HTMLElement) {
+  // Remove known garbage tags
   DROP_TAGS.forEach(tag => {
     root.querySelectorAll(tag).forEach(n => n.remove());
   });
 
-  // Remove elements with no text content
+  // Remove elements that are *truly* empty:
+  // - no text
+  // - AND no meaningful children
   root.querySelectorAll("*").forEach(el => {
-    if (!el.textContent?.trim() && el.tagName !== "IMG") el.remove();
+    const hasText = el.textContent?.trim().length > 0;
+
+    const hasMeaningfulChild = el.querySelector(
+      "p, img, li, blockquote, h1, h2, h3, h4"
+    );
+
+    // Only remove if BOTH are missing
+    if (!hasText && !hasMeaningfulChild) {
+      el.remove();
+    }
   });
 }
 
@@ -188,49 +200,54 @@ function classifyContent(doc: Document, blocksHtml: string) {
 }
 
 // =========================================================
-//  MAIN EXTRACTOR (Improved Reliability + Multi‑Node Merge)
+//  MAIN EXTRACTOR (more robust, multi-node + fallback)
 // =========================================================
 
 export async function fetchFullArticle(url: string): Promise<FullArticle> {
   const res = await fetch(`${HTML_PROXY}${encodeURIComponent(url)}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  // SAFER PARSE (prevents early DOM truncation)
-  let html = await res.text();
+  const html = await res.text();
   let doc = new DOMParser().parseFromString(html, "text/html");
 
   if (!doc || !doc.body) {
-    // fallback if DOMParser chokes
-    html = html.replace(/<script[\s\S]*?<\/script>/gi, "");
-    doc = new DOMParser().parseFromString(html, "text/html");
+    // fallback if DOMParser fails
+    const cleaned = html.replace(/<script[\s\S]*?<\/script>/gi, "");
+    doc = new DOMParser().parseFromString(cleaned, "text/html");
   }
 
   // Step 1: Remove boilerplate
   stripBoilerplate(doc.body);
 
-  // Step 2: Find multiple content‑dense nodes (instead of just one)
+  // Step 2: Score all candidates instead of only using findBestContentNode
   const candidates = [...doc.querySelectorAll("article, main, section, div")];
   const scored = candidates
     .map(el => ({
       el,
-      score:
-        (el.textContent?.trim().length || 0) +
-        el.querySelectorAll("p, li, h1, h2, h3, h4").length * 50
+      score: scoreNode(el)
     }))
     .sort((a, b) => b.score - a.score);
 
-  // Take top 2–3 nodes to avoid partial extraction
-  const bestNodes = scored.slice(0, 3).map(s => s.el);
+  // Take top 3 nodes to avoid picking only a tiny teaser
+  const bestNodes =
+    scored.length > 0 ? scored.slice(0, 3).map(s => s.el as HTMLElement) : [doc.body];
 
   // Step 3: Extract readable blocks from ALL top nodes
-  const blocksHtml = bestNodes
+  let blocksHtml = bestNodes
     .map(node => extractReadableBlocks(node))
     .join("\n");
 
-  // Step 4: Classify headline + summary + body
-  const { headline, summary } = classifyContent(doc, blocksHtml);
+  // Step 4: Fallback if we clearly got too little content
+  const plainText = blocksHtml.replace(/<[^>]+>/g, "").trim();
+  if (!plainText || plainText.split(/\s+/).length < 60) {
+    // use full body as last resort
+    blocksHtml = extractReadableBlocks(doc.body);
+  }
 
-  // Step 5: Extract OG image if available
+  // Step 5: Classify headline + summary + body
+  const { headline, summary, bodyHtml } = classifyContent(doc, blocksHtml);
+
+  // Step 6: Extract OG image if available
   const ogImg =
     doc.querySelector('meta[property="og:image"]')?.getAttribute("content") ||
     undefined;
@@ -238,7 +255,7 @@ export async function fetchFullArticle(url: string): Promise<FullArticle> {
   return {
     title: headline,
     summary,
-    html: blocksHtml,
+    html: bodyHtml ?? blocksHtml,
     image: ogImg
   };
 }
