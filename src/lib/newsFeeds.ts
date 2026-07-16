@@ -392,9 +392,12 @@ function tokenize(text: string): string[] {
 // "Saudi Arabia" that tokenization would split apart.
 function textContainsPhrase(lowerText: string, phrase: string): boolean {
   const p = phrase.toLowerCase();
-  // word-boundary match
-  const re = new RegExp(`(^|[^a-z])${p.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}([^a-z]|$)`);
-  return re.test(lowerText);
+  const idx = lowerText.indexOf(p);
+  if (idx < 0) return false;
+  const before = idx === 0 ? '' : lowerText[idx - 1];
+  const after = lowerText[idx + p.length] || '';
+  const isBoundary = (c: string) => c === '' || !/[a-z0-9]/.test(c);
+  return isBoundary(before) && isBoundary(after);
 }
 
 // 2. Fuzzy match (Levenshtein-lite)
