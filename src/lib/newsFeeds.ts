@@ -507,6 +507,19 @@ function isAmbiguousAlias(alias: string): boolean {
   return a.length <= 3 || ['american','british','french','german','chinese','indian','russian','israeli','iranian','turkish','saudi'].includes(a);
 }
 
+function locationContextBoost(lowerText: string, phrase: string): number {
+  const first = phraseFirstIndex(lowerText, phrase);
+  if (first < 0) return 0;
+  const before = lowerText.slice(Math.max(0, first - 42), first);
+  const after = lowerText.slice(first + phrase.length, first + phrase.length + 42);
+  let boost = 0;
+  if (/\b(in|inside|near|around|across|throughout|over|from|into|toward|bordering|crisis in|war in|conflict in|fighting in|strike in|attack in)\s+$/.test(before)) boost += 90;
+  if (/^\s+(border|capital|province|region|city|territory|front|coast|airspace)\b/.test(after)) boost += 28;
+  if (/^\s+(said|says|announced|warned|urged|officials|government|minister|president|secretary|spokesperson|embassy)\b/.test(after)) boost -= 85;
+  if (/\b(president|minister|secretary|officials|government|embassy|forces from)\s+$/.test(before)) boost -= 45;
+  return boost;
+}
+
 // =========================================================
 //  MAIN LOCATION EXTRACTOR
 // =========================================================
@@ -518,15 +531,18 @@ export function extractLocation(text: string): string | null {
 
   let best: string | null = null;
   let bestScore = 0;
+  let bestFirstIndex = Number.POSITIVE_INFINITY;
 
   for (const entry of WORLD_PLACES) {
     let s = 0;
+    let firstIndex = Number.POSITIVE_INFINITY;
     const canonicalMatches = countPhraseMatches(lower, entry.name);
     if (canonicalMatches > 0) {
       const first = phraseFirstIndex(lower, entry.name);
-      const earlyBoost = first >= 0 && first < 420 ? 34 : first >= 0 && first < 1200 ? 14 : 0;
-      const headlineBoost = textContainsPhrase(headlineZone, entry.name) ? 42 : 0;
-      s += (70 + canonicalMatches * 18 + earlyBoost + headlineBoost) * entry.priority;
+      firstIndex = Math.min(firstIndex, first);
+      const earlyBoost = first >= 0 && first < 160 ? 70 : first >= 0 && first < 420 ? 36 : first >= 0 && first < 1200 ? 14 : 0;
+      const headlineBoost = textContainsPhrase(headlineZone, entry.name) ? 54 : 0;
+      s += 82 + canonicalMatches * 18 + earlyBoost + headlineBoost + locationContextBoost(lower, entry.name) + entry.priority * 12;
     }
 
     for (const alias of entry.alt || []) {
@@ -534,14 +550,16 @@ export function extractLocation(text: string): string | null {
       if (matches === 0) continue;
       const ambiguous = isAmbiguousAlias(alias);
       const first = phraseFirstIndex(lower, alias);
-      const earlyBoost = first >= 0 && first < 420 ? (ambiguous ? 4 : 18) : 0;
+      firstIndex = Math.min(firstIndex, first);
+      const earlyBoost = first >= 0 && first < 420 ? (ambiguous ? 4 : 24) : 0;
       const aliasBase = ambiguous ? 5 : 26;
-      s += (aliasBase + matches * (ambiguous ? 3 : 10) + earlyBoost) * entry.priority;
+      s += aliasBase + matches * (ambiguous ? 3 : 10) + earlyBoost + (ambiguous ? 0 : locationContextBoost(lower, alias)) + entry.priority * (ambiguous ? 1 : 6);
     }
 
-    if (s > bestScore) {
+    if (s > bestScore || (s > 0 && Math.abs(s - bestScore) <= 24 && firstIndex < bestFirstIndex)) {
       bestScore = s;
       best = entry.name;
+      bestFirstIndex = firstIndex;
     }
   }
 
