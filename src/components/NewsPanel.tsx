@@ -69,7 +69,7 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
       const data = await fetchFullArticle(a.link);
       setFull(data);
     } catch {
-      setFull({ title: a.title, html: `<p>${a.summary}</p><p><em>Full article could not be loaded.</em></p>`, image: a.image });
+      setFull({ title: a.title, summary: a.summary, html: `<p>${a.summary}</p>`, image: a.image });
     } finally {
       setFullLoading(false);
     }
