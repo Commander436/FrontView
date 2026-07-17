@@ -14,10 +14,11 @@ interface Props {
 export function ViewSwitcher({ view, onChange, centerX, transitioning }: Props) {
   return (
     <div
-      className="pointer-events-none fixed top-4 z-[10001]"
+      className="pointer-events-none fixed top-4"
       style={{
         left: centerX != null ? `${centerX}px` : '50%',
         transform: 'translateX(-50%)',
+        zIndex: 1000000,
         opacity: transitioning ? 0 : 1,
         transition: 'left 500ms cubic-bezier(0.22,1,0.36,1), opacity 350ms ease-out',
       }}
