@@ -476,46 +476,35 @@ function textContainsPhrase(lowerText: string, phrase: string): boolean {
   return isBoundary(before) && isBoundary(after);
 }
 
-// 2. Fuzzy match (Levenshtein-lite)
-function fuzzyMatch(a: string, b: string): boolean {
-  if (a === b) return true;
-  if (Math.abs(a.length - b.length) > 2) return false;
-
-  let mismatches = 0;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    if (a[i] !== b[i]) mismatches++;
-    if (mismatches > 2) return false;
+function countPhraseMatches(lowerText: string, phrase: string): number {
+  const p = phrase.toLowerCase();
+  if (!p) return 0;
+  let count = 0;
+  let idx = lowerText.indexOf(p);
+  while (idx >= 0) {
+    const before = idx === 0 ? '' : lowerText[idx - 1];
+    const after = lowerText[idx + p.length] || '';
+    if ((before === '' || !/[a-z0-9]/.test(before)) && (after === '' || !/[a-z0-9]/.test(after))) count++;
+    idx = lowerText.indexOf(p, idx + p.length);
   }
-  return true;
+  return count;
 }
 
-// 3. ML-style scoring
-// Score = (match strength) * (priority) * (context weight)
-function scoreLocation(name: string, tokens: string[], entry: any): number {
-  let score = 0;
-
-  // direct match
-  if (tokens.includes(name.toLowerCase())) score += 5;
-
-  // fuzzy match
-  for (const t of tokens) {
-    if (fuzzyMatch(t, name.toLowerCase())) score += 3;
+function phraseFirstIndex(lowerText: string, phrase: string): number {
+  const p = phrase.toLowerCase();
+  let idx = lowerText.indexOf(p);
+  while (idx >= 0) {
+    const before = idx === 0 ? '' : lowerText[idx - 1];
+    const after = lowerText[idx + p.length] || '';
+    if ((before === '' || !/[a-z0-9]/.test(before)) && (after === '' || !/[a-z0-9]/.test(after))) return idx;
+    idx = lowerText.indexOf(p, idx + p.length);
   }
+  return -1;
+}
 
-  // alt names
-  if (entry.alt) {
-    for (const alt of entry.alt) {
-      if (tokens.includes(alt.toLowerCase())) score += 4;
-      for (const t of tokens) {
-        if (fuzzyMatch(t, alt.toLowerCase())) score += 2;
-      }
-    }
-  }
-
-  // priority (country > capital > city > region)
-  score *= entry.priority;
-
-  return score;
+function isAmbiguousAlias(alias: string): boolean {
+  const a = alias.toLowerCase();
+  return a.length <= 3 || ['american','british','french','german','chinese','indian','russian','israeli','iranian','turkish','saudi'].includes(a);
 }
 
 // =========================================================
@@ -525,25 +514,29 @@ function scoreLocation(name: string, tokens: string[], entry: any): number {
 export function extractLocation(text: string): string | null {
   if (!text) return null;
   const lower = text.toLowerCase();
-  const tokens = tokenize(text);
+  const headlineZone = lower.slice(0, 420);
 
   let best: string | null = null;
   let bestScore = 0;
 
   for (const entry of WORLD_PLACES) {
-    // Base fuzzy/token scoring
-    let s = scoreLocation(entry.name, tokens, entry);
+    let s = 0;
+    const canonicalMatches = countPhraseMatches(lower, entry.name);
+    if (canonicalMatches > 0) {
+      const first = phraseFirstIndex(lower, entry.name);
+      const earlyBoost = first >= 0 && first < 420 ? 34 : first >= 0 && first < 1200 ? 14 : 0;
+      const headlineBoost = textContainsPhrase(headlineZone, entry.name) ? 42 : 0;
+      s += (70 + canonicalMatches * 18 + earlyBoost + headlineBoost) * entry.priority;
+    }
 
-    // Multi-word phrase matches (e.g. "New York", "United States")
-    const names = [entry.name, ...(entry.alt || [])];
-    for (const n of names) {
-      if (n.includes(' ') && textContainsPhrase(lower, n)) {
-        s += 8 * entry.priority;
-      } else if (!n.includes(' ') && textContainsPhrase(lower, n)) {
-        // Weight repeated mentions
-        const matches = lower.split(n.toLowerCase()).length - 1;
-        s += matches * entry.priority;
-      }
+    for (const alias of entry.alt || []) {
+      const matches = countPhraseMatches(lower, alias);
+      if (matches === 0) continue;
+      const ambiguous = isAmbiguousAlias(alias);
+      const first = phraseFirstIndex(lower, alias);
+      const earlyBoost = first >= 0 && first < 420 ? (ambiguous ? 4 : 18) : 0;
+      const aliasBase = ambiguous ? 5 : 26;
+      s += (aliasBase + matches * (ambiguous ? 3 : 10) + earlyBoost) * entry.priority;
     }
 
     if (s > bestScore) {
@@ -552,7 +545,7 @@ export function extractLocation(text: string): string | null {
     }
   }
 
-  return bestScore > 0 ? best : null;
+  return bestScore >= 45 ? best : null;
 }
 
 // =========================================================
