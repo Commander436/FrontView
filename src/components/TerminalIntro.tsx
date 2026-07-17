@@ -501,13 +501,8 @@ Session integrity is not guaranteed.
 
 Unauthorized duplication, modification, or extraction of system components is prohibited.`}
             </div>
-            <div
-                className="mt-6 text-xs sm:text-sm tracking-wider cursor-pointer select-none"
-                style={{ opacity: promptOpacity }}
-                onClick={handleContinue}   // ← NEW: click to continue
-              >
-                Press Enter to continue<span className="cursor-blink-inline" />
-              </div>
+            <div className="mt-6 text-xs sm:text-sm tracking-wider" style={{ opacity: promptOpacity }}>
+              Press Enter to continue<span className="cursor-blink-inline" />
             </div>
           </div>
         )}
