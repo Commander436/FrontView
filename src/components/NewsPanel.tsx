@@ -29,8 +29,10 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
 
   // animation lifecycle
   const [phase, setPhase] = useState<'closed' | 'enter' | 'open' | 'exit'>('closed');
+  const phaseRef = useRef(phase);
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => {
     if (openTimerRef.current) window.clearTimeout(openTimerRef.current);
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
@@ -41,15 +43,12 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
       return;
     }
 
-    setPhase(prev => {
-      if (prev === 'closed') return 'closed';
-      setPhase('exit');
-      // Clear any open article so the modal doesn't linger during exit and
-      // block pointer events on the globe when we return to Global View.
-      setSelected(null);
-      setFull(null);
-      return 'exit';
-    });
+    if (phaseRef.current === 'closed') return;
+    setPhase('exit');
+    // Clear any open article so the modal doesn't linger during exit and
+    // block pointer events on the globe when we return to Global View.
+    setSelected(null);
+    setFull(null);
     closeTimerRef.current = window.setTimeout(() => setPhase('closed'), 520);
   }, [active]);
 
