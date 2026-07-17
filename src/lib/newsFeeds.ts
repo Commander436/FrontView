@@ -88,174 +88,215 @@ export async function fetchAggregatedNews(force = false): Promise<NewsArticle[]>
 }
 
 // =========================================================
-//  FAST ML‑STYLE ARTICLE EXTRACTOR (DENSITY + BOILERPLATE)
+//  RESILIENT ARTICLE EXTRACTOR (READER API + READABILITY FALLBACK)
 // =========================================================
 
-// Tags we never want
+const JINA_READER = 'https://r.jina.ai/http://';
+const ARTICLE_TTL = 15 * 60 * 1000;
+const articleCache = new Map<string, { ts: number; article: FullArticle }>();
+
+interface ExtractedArticle extends FullArticle { wordCount: number; }
+
 const DROP_TAGS = [
-  "script","style","noscript","iframe","form","svg","aside","nav",
-  "header","footer","button","link","meta","video","audio"
+  'script','style','noscript','iframe','form','svg','aside','nav','header','footer',
+  'button','link','meta','video','audio','canvas','template'
 ];
 
-// Utility: remove garbage nodes safely (keeps article containers)
-function stripBoilerplate(root: HTMLElement) {
-  // Remove known garbage tags
-  DROP_TAGS.forEach(tag => {
-    root.querySelectorAll(tag).forEach(n => n.remove());
-  });
+const BAD_TEXT_RE = /\b(cookie|cookies|subscribe|newsletter|advertisement|sponsored|sign up|sign in|log in|read more|share this|all rights reserved|privacy policy|terms of use|enable javascript|follow us|related stories|more on this story)\b/i;
 
-  // Remove elements that are *truly* empty:
-  // - no text
-  // - AND no meaningful children
-  root.querySelectorAll("*").forEach(el => {
-    const hasText = el.textContent?.trim().length > 0;
+function decodeEntities(s: string): string {
+  const el = document.createElement('textarea');
+  el.innerHTML = s;
+  return el.value;
+}
 
-    const hasMeaningfulChild = el.querySelector(
-      "p, img, li, blockquote, h1, h2, h3, h4"
-    );
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] || c));
+}
 
-    if (!hasText && !hasMeaningfulChild) {
+function wordsInText(text: string): number {
+  return (text.trim().match(/\b[\p{L}\p{N}][\p{L}\p{N}'’-]*\b/gu) || []).length;
+}
+
+function wordsInHtml(html: string): number {
+  return wordsInText(stripHtml(html));
+}
+
+function cleanText(text: string): string {
+  return decodeEntities(text).replace(/\s+/g, ' ').trim();
+}
+
+function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
+  return fetch(url, { signal: ctrl.signal, headers: { Accept: 'text/html,text/plain,application/xhtml+xml' } })
+    .then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.text();
+    })
+    .finally(() => window.clearTimeout(timer));
+}
+
+function absolutizeUrl(raw: string, baseUrl: string): string | null {
+  try { return new URL(raw, baseUrl).href; } catch { return null; }
+}
+
+function stripArticleBoilerplate(root: HTMLElement) {
+  DROP_TAGS.forEach(tag => root.querySelectorAll(tag).forEach(n => n.remove()));
+  root.querySelectorAll('[class],[id],[role]').forEach(el => {
+    const signature = `${el.getAttribute('class') || ''} ${el.getAttribute('id') || ''} ${el.getAttribute('role') || ''}`.toLowerCase();
+    if (/\b(ad|advert|promo|newsletter|subscribe|cookie|consent|share|social|sidebar|related|recommend|caption|byline|toolbar|breadcrumb|comment)\b/.test(signature)) {
       el.remove();
     }
   });
 }
 
-// =========================================================
-//  FIXED TEXT‑DENSITY SCORING (no more tiny nodes)
-// =========================================================
-// Score = (#text chars) + (#paragraphs * 200) + (#headers * 300)
-// This heavily favors REAL article bodies.
-// =========================================================
-
-function scoreNode(el: Element): number {
-  const text = el.textContent?.trim() || "";
-  const chars = text.length;
-
-  const pCount = el.querySelectorAll("p").length;
-  const hCount = el.querySelectorAll("h1, h2, h3, h4").length;
-
-  return chars + pCount * 200 + hCount * 300;
+function linkDensity(el: Element): number {
+  const textLen = cleanText(el.textContent || '').length || 1;
+  const linkLen = [...el.querySelectorAll('a')].reduce((sum, a) => sum + cleanText(a.textContent || '').length, 0);
+  return linkLen / textLen;
 }
 
-// =========================================================
-//  FIXED BEST‑NODE FINDER (multi‑node selection)
-// =========================================================
+function scoreArticleNode(el: Element): number {
+  const text = cleanText(el.textContent || '');
+  const wordCount = wordsInText(text);
+  if (wordCount < 25) return 0;
+  const paragraphCount = [...el.querySelectorAll('p')].filter(p => wordsInText(p.textContent || '') >= 12).length;
+  const punctuation = (text.match(/[.!?]/g) || []).length;
+  const semanticBoost = /^(ARTICLE|MAIN)$/i.test(el.tagName) ? 900 : 0;
+  const classBoost = /article|story|body|content|post|entry|main/i.test(`${el.getAttribute('class') || ''} ${el.getAttribute('id') || ''}`) ? 600 : 0;
+  const densityPenalty = Math.max(0.2, 1 - linkDensity(el) * 1.6);
+  return (wordCount * 18 + paragraphCount * 180 + punctuation * 16 + semanticBoost + classBoost) * densityPenalty;
+}
 
-function findBestContentNodes(doc: Document): HTMLElement[] {
-  const candidates = [...doc.querySelectorAll("article, main, section, div")];
+function sanitizeBlockHtml(el: Element, baseUrl: string): string {
+  const tag = el.tagName.toLowerCase();
+  if (tag === 'img') {
+    const src = (el as HTMLImageElement).currentSrc || (el as HTMLImageElement).src || el.getAttribute('data-src') || el.getAttribute('src');
+    const abs = src ? absolutizeUrl(src, baseUrl) : null;
+    const alt = escapeHtml((el as HTMLImageElement).alt || 'Article image');
+    return abs ? `<img src="${escapeHtml(abs)}" alt="${alt}" loading="lazy" />` : '';
+  }
+  const text = cleanText(el.textContent || '');
+  if (tag === 'p' && (wordsInText(text) < 8 || BAD_TEXT_RE.test(text))) return '';
+  if ((tag === 'li' || tag === 'blockquote') && wordsInText(text) < 5) return '';
+  if (/^h[1-4]$/.test(tag) && (wordsInText(text) < 2 || BAD_TEXT_RE.test(text))) return '';
+  if (tag === 'blockquote') return `<blockquote>${escapeHtml(text)}</blockquote>`;
+  if (tag === 'li') return `<p>${escapeHtml(text)}</p>`;
+  if (/^h[1-4]$/.test(tag)) return `<${tag}>${escapeHtml(text)}</${tag}>`;
+  return `<p>${escapeHtml(text)}</p>`;
+}
 
-  const scored = candidates
-    .map(el => ({ el, score: scoreNode(el) }))
+function extractBlocksFromNode(root: HTMLElement, baseUrl: string): string[] {
+  const blocks: string[] = [];
+  const seen = new Set<string>();
+  for (const block of [...root.querySelectorAll('h1,h2,h3,h4,p,blockquote,li,img')]) {
+    const text = cleanText(block.textContent || '');
+    const key = text.toLowerCase().slice(0, 220);
+    if (text && seen.has(key)) continue;
+    const html = sanitizeBlockHtml(block, baseUrl);
+    if (!html) continue;
+    if (text) seen.add(key);
+    blocks.push(html);
+  }
+  return blocks;
+}
+
+function extractHtmlArticle(rawHtml: string, baseUrl: string): ExtractedArticle | null {
+  const doc = new DOMParser().parseFromString(rawHtml, 'text/html');
+  if (!doc?.body) return null;
+  const title = cleanText(
+    doc.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
+    doc.querySelector('h1')?.textContent ||
+    doc.querySelector('title')?.textContent ||
+    'Article'
+  );
+  const image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || undefined;
+  stripArticleBoilerplate(doc.body);
+
+  const selectors = 'article,[itemprop="articleBody"],[class*="article" i],[class*="story" i],[class*="body" i],[class*="content" i],main,section,div';
+  const candidates = [...doc.querySelectorAll(selectors)]
+    .map(el => ({ el: el as HTMLElement, score: scoreArticleNode(el) }))
+    .filter(c => c.score > 0)
     .sort((a, b) => b.score - a.score);
 
-  // Take top 3 nodes instead of 1
-  return scored.slice(0, 3).map(s => s.el as HTMLElement);
+  const primary = candidates[0]?.el || doc.body;
+  let blocks = extractBlocksFromNode(primary, baseUrl);
+
+  if (wordsInHtml(blocks.join('\n')) < 120) {
+    blocks = extractBlocksFromNode(doc.body, baseUrl);
+  }
+
+  const html = blocks.join('\n');
+  const paragraphs = blocks.map(stripHtml).filter(t => wordsInText(t) >= 8);
+  const summary = paragraphs[0] || '';
+  const wordCount = wordsInHtml(html);
+  return wordCount > 0 ? { title, summary, html, image, wordCount } : null;
 }
 
-// =========================================================
-//  READABLE BLOCK EXTRACTOR (unchanged)
-// =========================================================
-
-function extractReadableBlocks(root: HTMLElement): string {
-  const blocks = [...root.querySelectorAll("p, h1, h2, h3, h4, li, img, blockquote")];
-
-  return blocks
-    .map(b => {
-      if (b.tagName === "IMG") {
-        const src = (b as HTMLImageElement).src || b.getAttribute("data-src");
-        return src ? `<img src="${src}" />` : "";
-      }
-      return b.outerHTML;
-    })
-    .join("\n");
+function markdownLineToHtml(line: string): string {
+  const clean = cleanText(line.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1').replace(/\*\*/g, ''));
+  if (!clean || BAD_TEXT_RE.test(clean)) return '';
+  if (clean.startsWith('# ')) return `<h2>${escapeHtml(clean.slice(2))}</h2>`;
+  if (clean.startsWith('## ')) return `<h3>${escapeHtml(clean.slice(3))}</h3>`;
+  return wordsInText(clean) >= 8 ? `<p>${escapeHtml(clean)}</p>` : '';
 }
 
-// =========================================================
-//  HEADLINE + SUMMARY + BODY CLASSIFIER
-// =========================================================
-// Headline = first <h1> or <title>
-// Summary = first <p> under headline OR first <p> in article
-// Body = remaining blocks
-// =========================================================
+function extractReaderArticle(markdown: string): ExtractedArticle | null {
+  const title = cleanText(markdown.match(/^Title:\s*(.+)$/m)?.[1] || 'Article');
+  const image = markdown.match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/)?.[1];
+  const content = (markdown.split(/Markdown Content:\s*/i)[1] || markdown)
+    .replace(/^Title:.*$/gmi, '')
+    .replace(/^URL Source:.*$/gmi, '')
+    .replace(/^Published Time:.*$/gmi, '')
+    .replace(/^Warning:.*$/gmi, '')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .trim();
 
-function classifyContent(doc: Document, blocksHtml: string) {
-  const headline =
-    doc.querySelector("h1")?.textContent?.trim() ||
-    doc.querySelector("title")?.textContent?.trim() ||
-    "Article";
+  const blocks: string[] = [];
+  const seen = new Set<string>();
+  for (const chunk of content.split(/\n{2,}/)) {
+    const joined = chunk.split('\n').map(l => l.trim()).filter(Boolean).join(' ');
+    const key = cleanText(joined).toLowerCase().slice(0, 220);
+    if (!key || seen.has(key)) continue;
+    const html = markdownLineToHtml(joined);
+    if (!html) continue;
+    seen.add(key);
+    blocks.push(html);
+  }
 
-  const temp = document.createElement("div");
-  temp.innerHTML = blocksHtml;
-
-  const paragraphs = [...temp.querySelectorAll("p")];
-  const summary = paragraphs[0]?.textContent?.trim() || "";
-
-  return {
-    headline,
-    summary,
-    bodyHtml: blocksHtml
-  };
+  const html = blocks.join('\n');
+  const summary = blocks.map(stripHtml).find(t => wordsInText(t) >= 8) || '';
+  const wordCount = wordsInHtml(html);
+  return wordCount > 0 ? { title, summary, html, image, wordCount } : null;
 }
-
-// =========================================================
-//  MAIN EXTRACTOR (more robust, multi-node + fallback)
-// =========================================================
 
 export async function fetchFullArticle(url: string): Promise<FullArticle> {
-  const res = await fetch(`${HTML_PROXY}${encodeURIComponent(url)}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const cached = articleCache.get(url);
+  if (cached && Date.now() - cached.ts < ARTICLE_TTL) return cached.article;
 
-  const html = await res.text();
-  let doc = new DOMParser().parseFromString(html, "text/html");
+  const readerUrl = `${JINA_READER}${url}`;
+  const htmlUrl = `${HTML_PROXY}${encodeURIComponent(url)}`;
+  const results = await Promise.allSettled([
+    fetchTextWithTimeout(readerUrl, 9000).then(extractReaderArticle),
+    fetchTextWithTimeout(htmlUrl, 9000).then(html => extractHtmlArticle(html, url)),
+  ]);
 
-  if (!doc || !doc.body) {
-    // fallback if DOMParser fails
-    const cleaned = html.replace(/<script[\s\S]*?<\/script>/gi, "");
-    doc = new DOMParser().parseFromString(cleaned, "text/html");
-  }
+  const extracted = results
+    .flatMap(r => r.status === 'fulfilled' && r.value ? [r.value] : [])
+    .sort((a, b) => b.wordCount - a.wordCount);
 
-  // Step 1: Remove boilerplate
-  stripBoilerplate(doc.body);
+  const best = extracted[0];
+  if (!best) throw new Error('Article extraction failed');
 
-  // Step 2: Score all candidates instead of only using findBestContentNode
-  const candidates = [...doc.querySelectorAll("article, main, section, div")];
-  const scored = candidates
-    .map(el => ({
-      el,
-      score: scoreNode(el)
-    }))
-    .sort((a, b) => b.score - a.score);
-
-  // Take top 3 nodes to avoid picking only a tiny teaser
-  const bestNodes =
-    scored.length > 0 ? scored.slice(0, 3).map(s => s.el as HTMLElement) : [doc.body];
-
-  // Step 3: Extract readable blocks from ALL top nodes
-  let blocksHtml = bestNodes
-    .map(node => extractReadableBlocks(node))
-    .join("\n");
-
-  // Step 4: Fallback if we clearly got too little content
-  const plainText = blocksHtml.replace(/<[^>]+>/g, "").trim();
-  if (!plainText || plainText.split(/\s+/).length < 60) {
-    // use full body as last resort
-    blocksHtml = extractReadableBlocks(doc.body);
-  }
-
-  // Step 5: Classify headline + summary + body
-  const { headline, summary, bodyHtml } = classifyContent(doc, blocksHtml);
-
-  // Step 6: Extract OG image if available
-  const ogImg =
-    doc.querySelector('meta[property="og:image"]')?.getAttribute("content") ||
-    undefined;
-
-  return {
-    title: headline,
-    summary,
-    html: bodyHtml ?? blocksHtml,
-    image: ogImg
+  const article: FullArticle = {
+    title: best.title,
+    summary: best.summary,
+    html: best.html || `<p>${escapeHtml(best.summary || best.title)}</p>`,
+    image: best.image,
   };
+  articleCache.set(url, { ts: Date.now(), article });
+  return article;
 }
 
 // =========================================================
@@ -435,46 +476,48 @@ function textContainsPhrase(lowerText: string, phrase: string): boolean {
   return isBoundary(before) && isBoundary(after);
 }
 
-// 2. Fuzzy match (Levenshtein-lite)
-function fuzzyMatch(a: string, b: string): boolean {
-  if (a === b) return true;
-  if (Math.abs(a.length - b.length) > 2) return false;
-
-  let mismatches = 0;
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    if (a[i] !== b[i]) mismatches++;
-    if (mismatches > 2) return false;
+function countPhraseMatches(lowerText: string, phrase: string): number {
+  const p = phrase.toLowerCase();
+  if (!p) return 0;
+  let count = 0;
+  let idx = lowerText.indexOf(p);
+  while (idx >= 0) {
+    const before = idx === 0 ? '' : lowerText[idx - 1];
+    const after = lowerText[idx + p.length] || '';
+    if ((before === '' || !/[a-z0-9]/.test(before)) && (after === '' || !/[a-z0-9]/.test(after))) count++;
+    idx = lowerText.indexOf(p, idx + p.length);
   }
-  return true;
+  return count;
 }
 
-// 3. ML-style scoring
-// Score = (match strength) * (priority) * (context weight)
-function scoreLocation(name: string, tokens: string[], entry: any): number {
-  let score = 0;
-
-  // direct match
-  if (tokens.includes(name.toLowerCase())) score += 5;
-
-  // fuzzy match
-  for (const t of tokens) {
-    if (fuzzyMatch(t, name.toLowerCase())) score += 3;
+function phraseFirstIndex(lowerText: string, phrase: string): number {
+  const p = phrase.toLowerCase();
+  let idx = lowerText.indexOf(p);
+  while (idx >= 0) {
+    const before = idx === 0 ? '' : lowerText[idx - 1];
+    const after = lowerText[idx + p.length] || '';
+    if ((before === '' || !/[a-z0-9]/.test(before)) && (after === '' || !/[a-z0-9]/.test(after))) return idx;
+    idx = lowerText.indexOf(p, idx + p.length);
   }
+  return -1;
+}
 
-  // alt names
-  if (entry.alt) {
-    for (const alt of entry.alt) {
-      if (tokens.includes(alt.toLowerCase())) score += 4;
-      for (const t of tokens) {
-        if (fuzzyMatch(t, alt.toLowerCase())) score += 2;
-      }
-    }
-  }
+function isAmbiguousAlias(alias: string): boolean {
+  const a = alias.toLowerCase();
+  return a.length <= 3 || ['american','british','french','german','chinese','indian','russian','israeli','iranian','turkish','saudi'].includes(a);
+}
 
-  // priority (country > capital > city > region)
-  score *= entry.priority;
-
-  return score;
+function locationContextBoost(lowerText: string, phrase: string): number {
+  const first = phraseFirstIndex(lowerText, phrase);
+  if (first < 0) return 0;
+  const before = lowerText.slice(Math.max(0, first - 42), first);
+  const after = lowerText.slice(first + phrase.length, first + phrase.length + 42);
+  let boost = 0;
+  if (/\b(in|inside|near|around|across|throughout|over|from|into|toward|bordering|crisis in|war in|conflict in|fighting in|strike in|attack in)\s+$/.test(before)) boost += 90;
+  if (/^\s+(border|capital|province|region|city|territory|front|coast|airspace)\b/.test(after)) boost += 28;
+  if (/^\s+(said|says|announced|warned|urged|officials|government|minister|president|secretary|spokesperson|embassy)\b/.test(after)) boost -= 85;
+  if (/\b(president|minister|secretary|officials|government|embassy|forces from)\s+$/.test(before)) boost -= 45;
+  return boost;
 }
 
 // =========================================================
@@ -484,34 +527,43 @@ function scoreLocation(name: string, tokens: string[], entry: any): number {
 export function extractLocation(text: string): string | null {
   if (!text) return null;
   const lower = text.toLowerCase();
-  const tokens = tokenize(text);
+  const headlineZone = lower.slice(0, 420);
 
   let best: string | null = null;
   let bestScore = 0;
+  let bestFirstIndex = Number.POSITIVE_INFINITY;
 
   for (const entry of WORLD_PLACES) {
-    // Base fuzzy/token scoring
-    let s = scoreLocation(entry.name, tokens, entry);
-
-    // Multi-word phrase matches (e.g. "New York", "United States")
-    const names = [entry.name, ...(entry.alt || [])];
-    for (const n of names) {
-      if (n.includes(' ') && textContainsPhrase(lower, n)) {
-        s += 8 * entry.priority;
-      } else if (!n.includes(' ') && textContainsPhrase(lower, n)) {
-        // Weight repeated mentions
-        const matches = lower.split(n.toLowerCase()).length - 1;
-        s += matches * entry.priority;
-      }
+    let s = 0;
+    let firstIndex = Number.POSITIVE_INFINITY;
+    const canonicalMatches = countPhraseMatches(lower, entry.name);
+    if (canonicalMatches > 0) {
+      const first = phraseFirstIndex(lower, entry.name);
+      firstIndex = Math.min(firstIndex, first);
+      const earlyBoost = first >= 0 && first < 160 ? 70 : first >= 0 && first < 420 ? 36 : first >= 0 && first < 1200 ? 14 : 0;
+      const headlineBoost = textContainsPhrase(headlineZone, entry.name) ? 54 : 0;
+      s += 82 + canonicalMatches * 18 + earlyBoost + headlineBoost + locationContextBoost(lower, entry.name) + entry.priority * 12;
     }
 
-    if (s > bestScore) {
+    for (const alias of entry.alt || []) {
+      const matches = countPhraseMatches(lower, alias);
+      if (matches === 0) continue;
+      const ambiguous = isAmbiguousAlias(alias);
+      const first = phraseFirstIndex(lower, alias);
+      firstIndex = Math.min(firstIndex, first);
+      const earlyBoost = first >= 0 && first < 420 ? (ambiguous ? 4 : 24) : 0;
+      const aliasBase = ambiguous ? 5 : 26;
+      s += aliasBase + matches * (ambiguous ? 3 : 10) + earlyBoost + (ambiguous ? 0 : locationContextBoost(lower, alias)) + entry.priority * (ambiguous ? 1 : 6);
+    }
+
+    if (s > bestScore || (s > 0 && Math.abs(s - bestScore) <= 24 && firstIndex < bestFirstIndex)) {
       bestScore = s;
       best = entry.name;
+      bestFirstIndex = firstIndex;
     }
   }
 
-  return bestScore > 0 ? best : null;
+  return bestScore >= 45 ? best : null;
 }
 
 // =========================================================

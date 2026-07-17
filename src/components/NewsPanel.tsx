@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNews } from '@/hooks/useNews';
 import { fetchFullArticle, extractLocation, geocode } from '@/lib/newsFeeds';
 import type { NewsArticle, FullArticle } from '@/types/news';
@@ -29,22 +29,33 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
 
   // animation lifecycle
   const [phase, setPhase] = useState<'closed' | 'enter' | 'open' | 'exit'>('closed');
+  const phaseRef = useRef(phase);
+  const openTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => {
-    if (active && phase === 'closed') {
-      setPhase('enter');
-      const t = setTimeout(() => setPhase('open'), 1100);
-      return () => clearTimeout(t);
+    if (openTimerRef.current) window.clearTimeout(openTimerRef.current);
+    if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+
+    if (active) {
+      setPhase(prev => prev === 'open' ? 'open' : 'enter');
+      openTimerRef.current = window.setTimeout(() => setPhase('open'), 1100);
+      return;
     }
-    if (!active && (phase === 'open' || phase === 'enter')) {
-      setPhase('exit');
-      // Clear any open article so the modal doesn't linger during exit and
-      // block pointer events on the globe when we return to Global View.
-      setSelected(null);
-      setFull(null);
-      const t = setTimeout(() => setPhase('closed'), 500);
-      return () => clearTimeout(t);
-    }
-  }, [active, phase]);
+
+    if (phaseRef.current === 'closed') return;
+    setPhase('exit');
+    // Clear any open article so the modal doesn't linger during exit and
+    // block pointer events on the globe when we return to Global View.
+    setSelected(null);
+    setFull(null);
+    closeTimerRef.current = window.setTimeout(() => setPhase('closed'), 520);
+  }, [active]);
+
+  useEffect(() => () => {
+    if (openTimerRef.current) window.clearTimeout(openTimerRef.current);
+    if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+  }, []);
 
   if (phase === 'closed') return null;
 
@@ -58,7 +69,7 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
       const data = await fetchFullArticle(a.link);
       setFull(data);
     } catch {
-      setFull({ title: a.title, html: `<p>${a.summary}</p><p><em>Full article could not be loaded.</em></p>`, image: a.image });
+      setFull({ title: a.title, summary: a.summary, html: `<p>${a.summary}</p>`, image: a.image });
     } finally {
       setFullLoading(false);
     }
@@ -67,7 +78,22 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
   const locate = async (a: NewsArticle) => {
     setLocating(true);
     try {
-      const text = [a.title, a.summary, full?.html ? full.html.replace(/<[^>]+>/g,' ') : ''].join(' ');
+      let article = full;
+      if (!article && !fullLoading) {
+        try {
+          article = await fetchFullArticle(a.link);
+          setFull(article);
+        } catch {
+          article = null;
+        }
+      }
+      const text = [
+        a.title,
+        a.summary,
+        article?.title || '',
+        article?.summary || '',
+        article?.html ? article.html.replace(/<[^>]+>/g,' ') : '',
+      ].join(' ');
       const place = extractLocation(text);
       if (!place) { toast.error('No recognizable location found in article'); return; }
       const geo = await geocode(place);
@@ -78,6 +104,7 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
       setTimeout(() => {
         const viewer = (window as any).__cesiumViewer;
         if (!viewer || viewer.isDestroyed() || typeof Cesium === 'undefined') return;
+        if (viewer.scene?.canvas) viewer.scene.canvas.style.pointerEvents = 'auto';
         viewer.camera.flyTo({
           destination: Cesium.Cartesian3.fromDegrees(geo.lon, geo.lat, 2500000),
           duration: 2.5,
@@ -98,11 +125,12 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
 
   const halvesEntering = phase === 'enter';
   const halvesExiting  = phase === 'exit';
+  const contentPointer = phase === 'exit' ? 'pointer-events-none' : 'pointer-events-auto';
 
   return (
     <div className={`fixed inset-0 z-[9999] ${rootPointer}`}>
       {/* Two halves slide in, then merge & expand */}
-      <div className="absolute inset-0 flex pointer-events-auto">
+      <div className={`absolute inset-0 flex ${contentPointer}`}>
         <div
           className={`flex-1 h-full ${halvesEntering ? 'news-half-left-in' : ''} ${halvesExiting ? 'news-half-left-out' : ''}`}
           style={{
