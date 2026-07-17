@@ -70,14 +70,25 @@ const Index = () => {
   const [view, setView] = useState<AppView>('global');
   const [hasNavigated, setHasNavigated] = useState(false);
   const [switcherTransitioning, setSwitcherTransitioning] = useState(false);
+  const viewRef = useRef<AppView>('global');
+  const switchTimersRef = useRef<number[]>([]);
+  useEffect(() => { viewRef.current = view; }, [view]);
+  useEffect(() => () => switchTimersRef.current.forEach(window.clearTimeout), []);
   const changeView = (v: AppView) => {
-    if (v === view) return;
+    if (v === viewRef.current) return;
+    switchTimersRef.current.forEach(window.clearTimeout);
+    switchTimersRef.current = [];
     setHasNavigated(true);
     // Fade the switcher out, swap views mid-fade, then fade back in once the
     // new layout has settled so it re-centers on the correct anchor.
     setSwitcherTransitioning(true);
-    setTimeout(() => setView(v), 250);
-    setTimeout(() => setSwitcherTransitioning(false), 1200);
+    switchTimersRef.current.push(
+      window.setTimeout(() => {
+        viewRef.current = v;
+        setView(v);
+      }, 250),
+      window.setTimeout(() => setSwitcherTransitioning(false), 1200)
+    );
   };
 
   // Track the horizontal center of the globe area so the top-center switcher
