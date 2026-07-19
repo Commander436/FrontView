@@ -398,11 +398,21 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       if (!entityType || !data) return;
     if (entityType !== 'aircraft' && entityType !== 'ship' && entityType !== 'satellite') return;
 
-    const id = entityType === 'aircraft' ? data.icao24
-             : entityType === 'ship'     ? data.mmsi
-             : (data.noradId ?? data.name);
-    spawnModelFor(entityType as 'aircraft' | 'ship' | 'satellite', id, data, picked.id);
+    // Double-click = camera lock/follow. Keep the 2D billboard icon visible
+    // (do NOT swap to a 3D model — user wants the icon centered on screen).
+    // Toggle: double-clicking the currently-tracked entity releases the lock.
+    if (viewer.trackedEntity === picked.id) {
+      viewer.trackedEntity = undefined;
+    } else {
+      viewer.trackedEntity = picked.id;
+    }
     }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+    // ESC releases camera tracking
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && viewer.trackedEntity) viewer.trackedEntity = undefined;
+    };
+    window.addEventListener('keydown', onKeyDown);
 
     viewerRef.current = viewer;
     (window as any).__cesiumViewer = viewer;
@@ -410,6 +420,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
 
     return () => {
       handler.destroy();
+      window.removeEventListener('keydown', onKeyDown);
       viewer.destroy();
       viewerRef.current = null;
       dsRefs.current = {};
