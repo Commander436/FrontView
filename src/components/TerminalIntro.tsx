@@ -201,9 +201,15 @@ export const TerminalIntro = ({ onComplete }: Props) => {
       <main className={containerClass} style={fontStyle}>
         <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
           <div className="text-base sm:text-xl tracking-wide">Welcome to FrontView.</div>
-          <div className="mt-4 text-sm sm:text-lg">
+          <button
+            type="button"
+            onClick={() => { audio.start(); setPhase("boot"); }}
+            className="mt-4 text-sm sm:text-lg cursor-pointer select-none bg-transparent border-0 text-white font-mono tracking-wide focus:outline-none active:opacity-70"
+            style={fontStyle}
+            aria-label="Press Enter or tap to continue"
+          >
             Press Enter to continue<span className="cursor-blink-inline" />
-          </div>
+          </button>
         </div>
       </main>
     );
@@ -442,33 +448,37 @@ const WarningScreen = ({ onDone }: { onDone: () => void }) => {
     return () => { cancelled = true; };
   }, []);
 
+  const handleContinue = useCallback(async () => {
+    if (!readyForEnter || exiting) return;
+    setExiting(true);
+    const fadeSteps = 10;
+    for (let i = fadeSteps; i >= 0; i--) {
+      setPromptOpacity(i / fadeSteps);
+      setWarningOpacity(i / fadeSteps);
+      await sleep(25);
+    }
+    await sleep(120);
+    const stepsH = 16;
+    for (let i = stepsH - 1; i >= 0; i--) {
+      setBoxH(Math.round((targetH * i) / stepsH));
+      await sleep(18);
+    }
+    const stepsW = 20;
+    for (let i = stepsW - 1; i >= 0; i--) {
+      setBoxW(Math.round((targetW * i) / stepsW));
+      await sleep(14);
+    }
+    await sleep(120);
+    onDone();
+  }, [readyForEnter, exiting, onDone]);
+
   useEffect(() => {
-    const onKey = async (e: KeyboardEvent) => {
-      if (e.key !== "Enter" || !readyForEnter || exiting) return;
-      setExiting(true);
-      const fadeSteps = 10;
-      for (let i = fadeSteps; i >= 0; i--) {
-        setPromptOpacity(i / fadeSteps);
-        setWarningOpacity(i / fadeSteps);
-        await sleep(25);
-      }
-      await sleep(120);
-      const stepsH = 16;
-      for (let i = stepsH - 1; i >= 0; i--) {
-        setBoxH(Math.round((targetH * i) / stepsH));
-        await sleep(18);
-      }
-      const stepsW = 20;
-      for (let i = stepsW - 1; i >= 0; i--) {
-        setBoxW(Math.round((targetW * i) / stepsW));
-        await sleep(14);
-      }
-      await sleep(120);
-      onDone();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") handleContinue();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [readyForEnter, exiting, onDone]);
+  }, [handleContinue]);
 
   return (
     <div className="min-h-screen w-full bg-black flex items-center justify-center px-4">
@@ -501,9 +511,16 @@ Session integrity is not guaranteed.
 
 Unauthorized duplication, modification, or extraction of system components is prohibited.`}
             </div>
-            <div className="mt-6 text-xs sm:text-sm tracking-wider" style={{ opacity: promptOpacity }}>
+            <button
+              type="button"
+              onClick={handleContinue}
+              disabled={!readyForEnter || exiting}
+              className="mt-6 text-xs sm:text-sm tracking-wider cursor-pointer select-none bg-transparent border-0 text-white font-mono focus:outline-none active:opacity-70 disabled:cursor-default"
+              style={{ opacity: promptOpacity }}
+              aria-label="Press Enter or tap to continue"
+            >
               Press Enter to continue<span className="cursor-blink-inline" />
-            </div>
+            </button>
           </div>
         )}
       </div>

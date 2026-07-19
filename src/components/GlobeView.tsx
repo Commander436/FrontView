@@ -25,7 +25,8 @@ const mkIcon = (svg: string) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
 // High-contrast vector silhouettes with a soft outer glow. Rendered at 2x for
 // crisp scaling. Always billboarded, rotated to the entity heading.
 const ICON_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><defs><filter id="g" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#g)" fill="#ffffff" stroke="#000000" stroke-width="0.6" stroke-linejoin="round"><path d="M24 3 L26 19 L45 26 L45 30 L26 27 L25 39 L31 42 L31 45 L24 43 L17 45 L17 42 L23 39 L22 27 L3 30 L3 26 L22 19 Z"/></g></svg>`);
-const ICON_MIL_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><defs><filter id="gm" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#gm)" fill="#ff8c1a" stroke="#1a0a00" stroke-width="0.7" stroke-linejoin="round"><path d="M24 2 L27 18 L46 28 L46 31 L27 29 L26 38 L33 43 L33 46 L24 43 L15 46 L15 43 L22 38 L21 29 L2 31 L2 28 L21 18 Z"/></g></svg>`);
+// Fighter-jet silhouette: pointed nose, swept delta wings, twin tail fins, afterburner.
+const ICON_MIL_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><defs><filter id="gm" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#gm)" fill="#ff8c1a" stroke="#1a0a00" stroke-width="0.8" stroke-linejoin="round"><path d="M28 3 L30 12 L31 22 L52 34 L52 37 L31 33 L31 40 L38 46 L38 49 L28 45 L18 49 L18 46 L25 40 L25 33 L4 37 L4 34 L25 22 L26 12 Z"/><path d="M25 44 L28 51 L31 44 Z" fill="#fff2c8" opacity="0.85"/><path d="M26.5 46 L28 50 L29.5 46 Z" fill="#fff" opacity="0.9"/></g></svg>`);
 const ICON_UNKNOWN_PLANE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><g fill="#c0c0c0" stroke="#000" stroke-width="0.5" stroke-linejoin="round"><path d="M24 6 L36 24 L24 42 L12 24 Z" opacity="0.85"/></g></svg>`);
 const ICON_SAT = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><g fill="#f59e0b" stroke="#d97706" stroke-width="0.3"><rect x="1" y="6" width="5" height="4" rx="0.5"/><rect x="10" y="6" width="5" height="4" rx="0.5"/><rect x="6" y="5" width="4" height="6" rx="1" fill="#fbbf24"/><circle cx="8" cy="8" r="1.5" fill="#d97706"/></g></svg>`);
 const ICON_BASE = mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18"><path d="M9 1L16 5V10C16 14 12.5 17 9 17C5.5 17 2 14 2 10V5Z" fill="#39ff1440" stroke="#39ff14" stroke-width="1"/><polygon points="9,5 10.2,7.5 13,7.8 11,9.7 11.5,12.5 9,11.2 6.5,12.5 7,9.7 5,7.8 7.8,7.5" fill="#39ff14"/></svg>`);
@@ -70,15 +71,27 @@ const SHIP_COLORS: Record<string, string> = {
 };
 function makeShipIcon(type: string) {
   const c = SHIP_COLORS[type] || '#3b82f6';
-  // Distinct silhouettes per class. All face "up" so billboard rotation matches heading.
+  // Top-down ship silhouette: pointed bow, straight hull, flat stern, superstructure.
+  // All variants face "up" (bow at top) so billboard rotation matches heading/course.
+  const hull = `<path d="M20 2 L26 10 L26 32 L24 36 L16 36 L14 32 L14 10 Z" fill="${c}" stroke="#000" stroke-width="0.7" stroke-linejoin="round"/>`;
   if (type === 'passenger') {
-    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g fill="${c}" stroke="#000" stroke-width="0.6" stroke-linejoin="round"><path d="M20 3 L23 12 L23 22 L31 26 L31 30 L9 30 L9 26 L17 22 L17 12 Z"/><rect x="18" y="14" width="4" height="2"/><rect x="18" y="18" width="4" height="2"/></g></svg>`);
+    // Cruise ship: long white hull, multi-deck superstructure, funnels
+    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g stroke-linejoin="round">${hull}<rect x="16" y="12" width="8" height="16" fill="#1f2937" stroke="#000" stroke-width="0.5"/><rect x="17" y="14" width="6" height="1.2" fill="#93c5fd"/><rect x="17" y="16.5" width="6" height="1.2" fill="#93c5fd"/><rect x="17" y="19" width="6" height="1.2" fill="#93c5fd"/><rect x="17" y="21.5" width="6" height="1.2" fill="#93c5fd"/><rect x="18" y="24.5" width="1.6" height="3" fill="#111"/><rect x="20.4" y="24.5" width="1.6" height="3" fill="#111"/></g></svg>`);
   }
-  if (type === 'cargo' || type === 'tanker') {
-    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g fill="${c}" stroke="#000" stroke-width="0.6" stroke-linejoin="round"><path d="M20 3 L24 14 L32 28 L8 28 L16 14 Z"/><rect x="14" y="18" width="12" height="3"/><rect x="14" y="22" width="12" height="3"/></g></svg>`);
+  if (type === 'cargo') {
+    // Container ship: hull with container blocks and small bridge at stern
+    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g stroke-linejoin="round">${hull}<rect x="15" y="12" width="10" height="2.2" fill="#0f172a"/><rect x="15" y="15" width="10" height="2.2" fill="#0f172a"/><rect x="15" y="18" width="10" height="2.2" fill="#0f172a"/><rect x="15" y="21" width="10" height="2.2" fill="#0f172a"/><rect x="15" y="24" width="10" height="2.2" fill="#0f172a"/><rect x="16" y="28" width="8" height="4" fill="#e5e7eb" stroke="#000" stroke-width="0.4"/></g></svg>`);
   }
-  // generic / fishing / military
-  return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g fill="${c}" stroke="#000" stroke-width="0.6" stroke-linejoin="round"><path d="M20 4 L26 16 L32 30 L8 30 L14 16 Z"/></g></svg>`);
+  if (type === 'tanker') {
+    // Tanker: hull with round tank domes and stern bridge
+    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g stroke-linejoin="round">${hull}<circle cx="20" cy="14" r="2.2" fill="#111"/><circle cx="20" cy="19" r="2.2" fill="#111"/><circle cx="20" cy="24" r="2.2" fill="#111"/><rect x="16" y="28" width="8" height="4" fill="#e5e7eb" stroke="#000" stroke-width="0.4"/></g></svg>`);
+  }
+  if (type === 'military') {
+    // Warship: narrow gray hull, forward gun turret, radar mast, aft superstructure
+    return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g stroke-linejoin="round"><path d="M20 2 L24 10 L24 32 L22.5 36 L17.5 36 L16 32 L16 10 Z" fill="${c}" stroke="#000" stroke-width="0.7"/><circle cx="20" cy="13" r="1.8" fill="#111"/><rect x="19.4" y="9" width="1.2" height="5" fill="#111"/><rect x="18" y="17" width="4" height="7" fill="#7f1d1d" stroke="#000" stroke-width="0.4"/><line x1="20" y1="17" x2="20" y2="10" stroke="#111" stroke-width="0.6"/><rect x="18.5" y="26" width="3" height="5" fill="#7f1d1d" stroke="#000" stroke-width="0.4"/></g></svg>`);
+  }
+  // fishing / generic: small hull with cabin
+  return mkIcon(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><g stroke-linejoin="round">${hull}<rect x="17" y="18" width="6" height="8" fill="#0f172a" stroke="#000" stroke-width="0.4"/><rect x="18.5" y="20" width="3" height="1.4" fill="#fde68a"/></g></svg>`);
 }
 
 function getInfraIcon(type: string) {
@@ -385,11 +398,21 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
       if (!entityType || !data) return;
     if (entityType !== 'aircraft' && entityType !== 'ship' && entityType !== 'satellite') return;
 
-    const id = entityType === 'aircraft' ? data.icao24
-             : entityType === 'ship'     ? data.mmsi
-             : (data.noradId ?? data.name);
-    spawnModelFor(entityType as 'aircraft' | 'ship' | 'satellite', id, data, picked.id);
+    // Double-click = camera lock/follow. Keep the 2D billboard icon visible
+    // (do NOT swap to a 3D model — user wants the icon centered on screen).
+    // Toggle: double-clicking the currently-tracked entity releases the lock.
+    if (viewer.trackedEntity === picked.id) {
+      viewer.trackedEntity = undefined;
+    } else {
+      viewer.trackedEntity = picked.id;
+    }
     }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+    // ESC releases camera tracking
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && viewer.trackedEntity) viewer.trackedEntity = undefined;
+    };
+    window.addEventListener('keydown', onKeyDown);
 
     viewerRef.current = viewer;
     (window as any).__cesiumViewer = viewer;
@@ -397,6 +420,7 @@ export function GlobeView({ layers, aircraft, satellites, thermalAnomalies, live
 
     return () => {
       handler.destroy();
+      window.removeEventListener('keydown', onKeyDown);
       viewer.destroy();
       viewerRef.current = null;
       dsRefs.current = {};
