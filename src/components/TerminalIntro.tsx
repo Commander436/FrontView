@@ -201,9 +201,15 @@ export const TerminalIntro = ({ onComplete }: Props) => {
       <main className={containerClass} style={fontStyle}>
         <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
           <div className="text-base sm:text-xl tracking-wide">Welcome to FrontView.</div>
-          <div className="mt-4 text-sm sm:text-lg">
+          <button
+            type="button"
+            onClick={() => { audio.start(); setPhase("boot"); }}
+            className="mt-4 text-sm sm:text-lg cursor-pointer select-none bg-transparent border-0 text-white font-mono tracking-wide focus:outline-none active:opacity-70"
+            style={fontStyle}
+            aria-label="Press Enter or tap to continue"
+          >
             Press Enter to continue<span className="cursor-blink-inline" />
-          </div>
+          </button>
         </div>
       </main>
     );
