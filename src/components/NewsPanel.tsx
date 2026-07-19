@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNews } from '@/hooks/useNews';
 import { fetchFullArticle, extractLocation, geocode } from '@/lib/newsFeeds';
 import type { NewsArticle, FullArticle } from '@/types/news';
@@ -26,6 +26,76 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
   const [full, setFull] = useState<FullArticle | null>(null);
   const [fullLoading, setFullLoading] = useState(false);
   const [locating, setLocating] = useState(false);
+
+  // --- Highlight mode ---
+  const articleBodyRef = useRef<HTMLDivElement>(null);
+  const [toolbar, setToolbar] = useState<{ x: number; y: number } | null>(null);
+  const HIGHLIGHT_COLORS: { name: string; cls: string; swatch: string }[] = [
+    { name: 'Yellow', cls: 'highlight-yellow', swatch: '#facc15' },
+    { name: 'Red',    cls: 'highlight-red',    swatch: '#ef4444' },
+    { name: 'White',  cls: 'highlight-white',  swatch: '#ffffff' },
+    { name: 'Blue',   cls: 'highlight-blue',   swatch: '#3b82f6' },
+    { name: 'Orange', cls: 'highlight-orange', swatch: '#f97316' },
+    { name: 'Green',  cls: 'highlight-green',  swatch: '#22c55e' },
+  ];
+
+  const storageKey = (link: string) => `fv-highlight:${link}`;
+  const savedHtmlFor = (link: string): string | null => {
+    try { return localStorage.getItem(storageKey(link)); } catch { return null; }
+  };
+  const persistHighlights = useCallback(() => {
+    if (!selected || !articleBodyRef.current) return;
+    try { localStorage.setItem(storageKey(selected.link), articleBodyRef.current.innerHTML); } catch { /* ignore quota */ }
+  }, [selected]);
+
+  const applyHighlight = useCallback((cls: string) => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const body = articleBodyRef.current;
+    if (!body || !body.contains(range.commonAncestorContainer)) return;
+    const span = document.createElement('span');
+    span.className = cls;
+    try {
+      // surroundContents fails across element boundaries — fall back to extract+insert
+      try { range.surroundContents(span); }
+      catch {
+        const frag = range.extractContents();
+        span.appendChild(frag);
+        range.insertNode(span);
+      }
+      sel.removeAllRanges();
+      setToolbar(null);
+      persistHighlights();
+    } catch { /* noop */ }
+  }, [persistHighlights]);
+
+  const handleBodyMouseUp = useCallback(() => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { setToolbar(null); return; }
+    const range = sel.getRangeAt(0);
+    const body = articleBodyRef.current;
+    if (!body || !body.contains(range.commonAncestorContainer)) { setToolbar(null); return; }
+    const rect = range.getBoundingClientRect();
+    if (!rect || (rect.width === 0 && rect.height === 0)) { setToolbar(null); return; }
+    setToolbar({ x: rect.left + rect.width / 2, y: rect.top - 8 });
+  }, []);
+
+  // Hide toolbar when selection clears elsewhere
+  useEffect(() => {
+    const onDocDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && t.closest('[data-highlight-toolbar]')) return;
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) setToolbar(null);
+    };
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('touchstart', onDocDown, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', onDocDown);
+      document.removeEventListener('touchstart', onDocDown);
+    };
+  }, []);
 
   // animation lifecycle
   const [phase, setPhase] = useState<'closed' | 'enter' | 'open' | 'exit'>('closed');
@@ -65,11 +135,14 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
     setSelected(a);
     setFull(null);
     setFullLoading(true);
+    setToolbar(null);
     try {
       const data = await fetchFullArticle(a.link);
-      setFull(data);
+      const saved = savedHtmlFor(a.link);
+      setFull(saved ? { ...data, html: saved } : data);
     } catch {
-      setFull({ title: a.title, summary: a.summary, html: `<p>${a.summary}</p>`, image: a.image });
+      const saved = savedHtmlFor(a.link);
+      setFull({ title: a.title, summary: a.summary, html: saved || `<p>${a.summary}</p>`, image: a.image });
     } finally {
       setFullLoading(false);
     }
@@ -236,6 +309,9 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
                 </div>
               ) : (
                 <div
+                  ref={articleBodyRef}
+                  onMouseUp={handleBodyMouseUp}
+                  onTouchEnd={handleBodyMouseUp}
                   className="prose prose-invert prose-sm max-w-none text-foreground/90 leading-relaxed
                     [&_p]:mb-4 [&_h1]:text-2xl [&_h2]:text-xl [&_h3]:text-lg [&_h2]:mt-6 [&_h3]:mt-5
                     [&_img]:rounded-lg [&_img]:my-4 [&_img]:max-h-[360px] [&_img]:w-auto
@@ -264,6 +340,31 @@ export function NewsPanel({ active, onRequestGlobal }: Props) {
               </div>
             </div>
           </div>
+          {/* Floating highlight toolbar */}
+          {toolbar && (
+            <div
+              data-highlight-toolbar
+              className="fixed z-[60] flex items-center gap-1.5 px-2 py-1.5 rounded-full glass-panel bg-card/95 border border-foreground/20 shadow-xl"
+              style={{
+                left: Math.max(90, Math.min(window.innerWidth - 90, toolbar.x)),
+                top: Math.max(52, toolbar.y),
+                transform: 'translate(-50%, -100%)',
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
+              {HIGHLIGHT_COLORS.map(c => (
+                <button
+                  key={c.cls}
+                  onClick={() => applyHighlight(c.cls)}
+                  title={c.name}
+                  aria-label={`Highlight ${c.name}`}
+                  className="w-5 h-5 rounded-full border border-black/30 hover:scale-110 active:scale-95 transition-transform"
+                  style={{ background: c.swatch }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
